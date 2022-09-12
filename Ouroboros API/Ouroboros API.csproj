@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <RootNamespace>Ouroboros_API</RootNamespace>
+    <AssemblyName>Ouroboros_API</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\.editorconfig" Link=".editorconfig" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+    <PackageReference Include="System.Drawing.Common" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Ouroboros">
+      <HintPath>..\..\Ouroboros\Ouroboros\bin\Release\net6.0\Ouroboros.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
