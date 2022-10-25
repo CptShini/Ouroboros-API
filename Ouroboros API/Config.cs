@@ -13,12 +13,16 @@ namespace Ouroboros_API
     {
         public string playerName;
         public long playerId;
-        public bool FCReq = false;
+        public bool FCReq = true;
         public bool PlayedReq = false;
+        public bool reqPlaylistsSortByAge = false;
+        public bool splitByElderTech = true;
         public bool SongSuggest = false;
         public bool SnipeTime = false;
         public int snipeNum = 10;
         public long[] snipeList;
+        public bool dominancePlaylist = false;
+        public bool savePlayGraph = true;
 
         public Config()
         {
@@ -36,21 +40,25 @@ namespace Ouroboros_API
         public static Config LoadConfig(long id)
         {
             if (debugLevel >= DebugLevel.Full) Console.WriteLine("Loading config for " + id);
-            string data = Load($@"{mainDataPath + id}_config.json");
+            string data = Load($@"{userDataPath + id}_config.json");
             if (data == null)
             {
                 if (debugLevel >= DebugLevel.Advanced) Console.WriteLine("Creating new config for " + id);
                 return new Config(id);
             }
             if (debugLevel >= DebugLevel.Dev) Console.WriteLine("Loaded config:\n" + data);
-            return DeserializeString<Config>(data);
+            Config c = DeserializeString<Config>(data);
+            c.SaveConfig();
+
+            config = c;
+            return c;
         }
 
         public void SaveConfig()
         {
             if (debugLevel >= DebugLevel.Full) Console.WriteLine("Saving config for " + playerId);
             string data = SerializeToJSON(this);
-            Save($@"{mainDataPath + playerId}_config.json", data);
+            Save($@"{userDataPath + playerId}_config.json", data);
             if (debugLevel >= DebugLevel.Dev) Console.WriteLine("Saved config:\n" + data);
         }
     }

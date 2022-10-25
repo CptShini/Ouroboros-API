@@ -15,6 +15,7 @@ namespace Ouroboros_API
     /// </summary>
     public static class Core
     {
+        public static Config config;
 
         private static int sleepTime = 0;
 
@@ -33,14 +34,17 @@ namespace Ouroboros_API
         /// </summary>
         private static readonly JsonSerializerSettings serializerSettings = new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore, Formatting = Formatting.Indented };
 
+        private static string beatSaberPath;
+        public static string userDataPath;
         /// <summary>
         /// The players Beat Saber playlist directory. Example: E:\Steam\steamapps\common\Beat Saber\Playlists\
         /// </summary>
         private static string playlistPath;
+        private static string ouroborosPath;
         /// <summary>
         /// The path to the folder in which all API data is saved for later use.
         /// </summary>
-        public const string mainDataPath = @"SaveLoadData\";
+        private static string mainDataPath;
         /// <summary>
         /// A dictionary that where key is the requested URL (only the section after APIBaseURL), and the value is the requested data.
         /// </summary>
@@ -54,10 +58,15 @@ namespace Ouroboros_API
         /// Sets the directory to the players playlist folder and sets up the neccessary folders.
         /// </summary>
         /// <param name="playlistPath">The path to the players Beat Saber playlist directory.</param>
-        public static void Initialize(string playlistPath)
+        public static void Initialize(string beatSaberLoc)
         {
-            if (debugLevel >= DebugLevel.Basic) Console.WriteLine("Initializing Program");
-            Core.playlistPath = playlistPath + @"0uroboros\";
+            if (debugLevel >= DebugLevel.Basic) Println("Initializing Program");
+            beatSaberPath = beatSaberLoc;
+            userDataPath = $@"{beatSaberPath}UserData\Ouroboros\";
+            mainDataPath = $@"{userDataPath}SaveLoadData\";
+
+            playlistPath = $@"{beatSaberPath}Playlists\";
+            ouroborosPath = $@"{playlistPath}0uroboros\";
             CreateRequiredFolders();
         }
 
@@ -66,11 +75,14 @@ namespace Ouroboros_API
         /// </summary>
         private static void CreateRequiredFolders()
         {
-            if (debugLevel >= DebugLevel.Full) Console.WriteLine("Creating required folders if they do not already exist");
+            if (debugLevel >= DebugLevel.Full) Println("Creating required folders if they do not already exist");
             Directory.CreateDirectory(mainDataPath);
-            Directory.CreateDirectory(playlistPath + @"#\");
-            Directory.CreateDirectory(playlistPath + @"Sniping\");
-            Directory.CreateDirectory(playlistPath + @"Øuroboros\");
+
+            Directory.CreateDirectory($@"{ouroborosPath}#\");
+            Directory.CreateDirectory($@"{ouroborosPath}Sniping\");
+            Directory.CreateDirectory($@"{ouroborosPath}Øuroboros\");
+
+            Directory.CreateDirectory($@"{playlistPath}YourOtherPlaylists\");
         }
 
         #endregion
@@ -108,12 +120,13 @@ namespace Ouroboros_API
         public static string APIGet(string url)
         {
             Stopwatch timer = new();
+
             timer.Start();
             string result = client.DownloadString(APIBaseUrl + url);
             if (sleepTime > 0) System.Threading.Thread.Sleep(sleepTime);
             timer.Stop();
 
-            if (debugLevel >= DebugLevel.Dev) Console.WriteLine($"Get-Request ({timer.ElapsedMilliseconds}ms): {APIBaseUrl}{url}");
+            if (debugLevel >= DebugLevel.Dev) Println($"Get-Request ({timer.ElapsedMilliseconds}ms): {APIBaseUrl}{url}");
             return result;
         }
 
@@ -121,11 +134,11 @@ namespace Ouroboros_API
 
         #region Playlist Creation Functions
 
-        public static void GenerateEmptyPlaylists(int n, string path)
+        public static void GenerateEmptyPlaylists(int n, string title, string path)
         {
-            for (int i = 0; i < n; i++)
+            for (int i = 0; i < GetPlaceholderNum(n); i++)
             {
-                GenerateEmptyPlaylist($"placeholder {i}", path);
+                GenerateEmptyPlaylist($"{title} placeholder {i}", path);
             }
         }
 
@@ -143,16 +156,16 @@ namespace Ouroboros_API
         /// <returns>True, if playlist generation was successful. False, if playlist wasn't generated.</returns>
         public static bool GenerateBPList(string title, string path, LeaderboardInfo[] maps)
         {
-            if (maps.Length <= 0 && !title.Contains("placeholder")) { if (debugLevel >= DebugLevel.Advanced) Console.WriteLine("Failed to create playlist. Maps array of length 0"); return false; }
+            if (maps.Length <= 0 && !title.Contains("placeholder")) { if (debugLevel >= DebugLevel.Advanced) Println("Failed to create playlist. Maps array of length 0"); return false; }
             
             string contents = GetPlaylistString(title, "Ouroboros", maps);
             string salt = $" ({Base64Encode(DateTime.Now.Millisecond.ToString())})";
             title = CleanFileName(title + salt);
-            path = playlistPath + path + title + ".bplist";
+            path = $"{ouroborosPath}{path}{title}.bplist";
 
-            if (debugLevel >= DebugLevel.Advanced) Console.WriteLine("Creating playlist called " + title + " with length " + maps.Length);
+            if (debugLevel >= DebugLevel.Advanced) Println($"Creating playlist called {title} with length {maps.Length}");
             Save(path, contents);
-            if (debugLevel >= DebugLevel.Full) Console.WriteLine("Finished creating playlist");
+            if (debugLevel >= DebugLevel.Full) Println("Finished creating playlist");
             return true;
         }
 
@@ -168,8 +181,8 @@ namespace Ouroboros_API
             string result = "";
             result += "{\n";
 
-            result += "  \"playlistTitle\": \"" + title.Replace(@"\", "") + "\",\n";
-            result += "  \"playlistAuthor\": \"" + author + "\",\n";
+            result += $"  \"playlistTitle\": \"{title.Replace(@"\", "")}\",\n";
+            result += $"  \"playlistAuthor\": \"{author}\",\n";
             result += "  \"image\": \"\",\n";
 
             //data:image/png;base64,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
@@ -197,11 +210,11 @@ namespace Ouroboros_API
             string result = "";
             result += "    {\n";
 
-            result += "      \"hash\": \"" + map.songHash + "\",\n";
+            result += $"      \"hash\": \"{map.songHash}\",\n";
             result += "      \"difficulties\": [\n";
             result += "        {\n";
             result += "          \"characteristic\": \"Standard\",\n";
-            result += "          \"name\": \"" + ResolveDifficultyName(map.difficulty.difficulty) + "\"\n";
+            result += $"          \"name\": \"{ResolveDifficultyName(map.difficulty.difficulty)}\"\n";
             result += "        }\n";
             result += "      ]\n";
             result += "    },\n";
@@ -216,18 +229,8 @@ namespace Ouroboros_API
         /// <returns>The cleaned file name.</returns>
         public static string CleanFileName(string fileName)
         {
+            fileName = fileName.Replace("ツ", "");
             return Path.GetInvalidFileNameChars().Aggregate(fileName, (current, c) => current.Replace(c.ToString(), string.Empty));
-        }
-
-        /// <summary>
-        /// Deletes all playlists in the predetermined folders.
-        /// </summary>
-        public static void DeletePlaylists()
-        {
-            if (debugLevel >= DebugLevel.Advanced) Console.WriteLine("Clearing playlist folder");
-            DeleteFolderContents(playlistPath + @"#\", "bplist");
-            DeleteFolderContents(playlistPath + @"Sniping\", "bplist");
-            DeleteFolderContents(playlistPath + @"Øuroboros\", "bplist");
         }
 
         #endregion
@@ -362,7 +365,29 @@ namespace Ouroboros_API
 
         public static string GetSongNameWDiff(LeaderboardInfo leaderboard)
         {
-            return leaderboard.songName + " (" + ResolveDifficultyName(leaderboard.difficulty.difficulty) + ")";
+            return $"{leaderboard.songName} ({ResolveDifficultyName(leaderboard.difficulty.difficulty)})";
+        }
+
+        public static string GetTimeEstimate(int n, int w)
+        {
+            string output;
+
+            double totalSeconds = TimeSpan.FromMilliseconds(n * w).TotalSeconds;
+            if (totalSeconds > 60)
+            {
+                int minutes = (int)(totalSeconds / 60);
+                int seconds = (int)(totalSeconds % 60);
+
+                output = $"{minutes:00}:{seconds:00}";
+            }
+            else
+            {
+                int seconds = (int)totalSeconds;
+
+                output = $"00:{seconds:00}";
+            }
+
+            return output;
         }
 
         public static PlayerScore[] UpdatePlayerScores(PlayerScore[] playerScores)
@@ -466,15 +491,15 @@ namespace Ouroboros_API
 
             return n switch
             {
-                1 => "#" + rank.ToString("0"),
-                2 => "#" + rank.ToString("00"),
-                3 => "#" + rank.ToString("000"),
-                4 => "#" + rank.ToString("0000"),
-                5 => "#" + rank.ToString("00000"),
-                6 => "#" + rank.ToString("000000"),
-                7 => "#" + rank.ToString("0000000"),
-                8 => "#" + rank.ToString("00000000"),
-                _ => "#" + rank.ToString("0")
+                1 => $"#{rank:0}",
+                2 => $"#{rank:00}",
+                3 => $"#{rank:000}",
+                4 => $"#{rank:0000}",
+                5 => $"#{rank:00000}",
+                6 => $"#{rank:000000}",
+                7 => $"#{rank:0000000}",
+                8 => $"#{rank:00000000}",
+                _ => $"#{rank:0}"
             };
         }
 
@@ -672,7 +697,7 @@ namespace Ouroboros_API
         /// <param name="contents">The actual string to be saved.</param>
         public static void Save(string path, string contents)
         {
-            if (debugLevel >= DebugLevel.Dev) Console.WriteLine("Saving file at " + path);
+            if (debugLevel >= DebugLevel.Dev) Println($"Saving file at {path}");
             using StreamWriter sw = File.CreateText(path);
             sw.WriteLine(contents);
         }
@@ -689,10 +714,10 @@ namespace Ouroboros_API
         /// <returns>The data loaded from the text file.</returns>
         public static string? Load(string path)
         {
-            if (debugLevel >= DebugLevel.Dev) Console.WriteLine("Loading file from " + path);
+            if (debugLevel >= DebugLevel.Dev) Println($"Loading file from {path}");
             if (!File.Exists(path))
             {
-                if (debugLevel >= DebugLevel.Full) Console.WriteLine("No file exists at " + path);
+                if (debugLevel >= DebugLevel.Full) Println($"No file exists at {path}");
                 return null;
             }
             return File.ReadAllText(path);
@@ -718,7 +743,7 @@ namespace Ouroboros_API
             FileInfo[] files = di.GetFiles();
             foreach (FileInfo file in files)
             {
-                if (file.Name == Base64Encode(targetURL) + ".txt")
+                if (file.Name == $"{Base64Encode(targetURL)}.txt")
                 {
                     loadedData = true;
                     string dataType = ResolveTargetURLDataType(targetURL);
@@ -751,7 +776,7 @@ namespace Ouroboros_API
                     if (!loadedData)
                     {
                         file.Delete();
-                        if (debugLevel >= DebugLevel.Dev) Console.WriteLine("Deleting data! Either out of sync or too old");
+                        if (debugLevel >= DebugLevel.Dev) Println("Deleting data! Either out of sync or too old");
                     }
                 }
             }
@@ -764,7 +789,7 @@ namespace Ouroboros_API
         /// </summary>
         public static void RenewAllData()
         {
-            if (debugLevel >= DebugLevel.Basic) Console.WriteLine("Renewing all data");
+            if (debugLevel >= DebugLevel.Basic) Println("Renewing all data");
             DirectoryInfo di = new DirectoryInfo(mainDataPath);
             FileInfo[] files = di.GetFiles();
             foreach (FileInfo file in files)
@@ -776,7 +801,7 @@ namespace Ouroboros_API
                 file.Delete();
                 GetContents(url, false, -1);
             }
-            if (debugLevel >= DebugLevel.Basic) Console.WriteLine("Finished renewing all data");
+            if (debugLevel >= DebugLevel.Basic) Println("Finished renewing all data");
         }
 
         /// <summary>
@@ -794,12 +819,39 @@ namespace Ouroboros_API
 
                 file.Delete();
             }
-            if (debugLevel >= DebugLevel.Full) Console.WriteLine("Folder contents deleted successfully");
+            if (debugLevel >= DebugLevel.Full) Println("Folder contents deleted successfully");
         }
 
-        public static void ClearAllData(string ext)
+        public static void ClearData(DataType t)
         {
-            DeleteFolderContents(mainDataPath, ext);
+            switch (t)
+            {
+                case DataType.SaveData:
+                    if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros API SaveData");
+                    DeleteFolderContents(mainDataPath, "txt");
+                    break;
+                case DataType.Configs:
+                    if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros player configs");
+                    DeleteFolderContents(userDataPath, "json");
+                    break;
+                case DataType.Playlists:
+                    if (debugLevel >= DebugLevel.Advanced) Println("Clearing playlist folder");
+                    DeleteFolderContents($@"{ouroborosPath}#\", "bplist");
+                    DeleteFolderContents($@"{ouroborosPath}Sniping\", "bplist");
+                    DeleteFolderContents($@"{ouroborosPath}Øuroboros\", "bplist");
+                    break;
+                case DataType.PlaylistsAndSaveData:
+                    if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros API SaveData");
+                    DeleteFolderContents(mainDataPath, "txt");
+
+                    if (debugLevel >= DebugLevel.Advanced) Println("Clearing playlist folder");
+                    DeleteFolderContents($@"{ouroborosPath}#\", "bplist");
+                    DeleteFolderContents($@"{ouroborosPath}Sniping\", "bplist");
+                    DeleteFolderContents($@"{ouroborosPath}Øuroboros\", "bplist");
+                    break;
+                default:
+                    break;
+            }
         }
 
         #endregion
@@ -837,7 +889,33 @@ namespace Ouroboros_API
 
         public static void Print(dynamic contents)
         {
+            Console.Write(contents);
+        }
+
+        public static void Println(dynamic contents)
+        {
             Console.WriteLine(contents);
+        }
+
+        public static void Println()
+        {
+            Console.WriteLine();
+        }
+
+        public static void PrintScoreLeaderboardMix(PlayerScore[] scores, LeaderboardInfo[] leaderboards)
+        {
+            for (int i = 0; i < leaderboards.Length; i++)
+            {
+                PlayerScore[] s = scores.Where(ps => ps.leaderboard.id == leaderboards[i].id).ToArray();
+                if (s.Length > 0)
+                {
+                    PrintPlayerScore(s[0]);
+                }
+                else
+                {
+                    PrintLeaderboardInfo(leaderboards[i]);
+                }
+            }
         }
 
         #region Leaderboards
@@ -852,14 +930,15 @@ namespace Ouroboros_API
 
         public static void PrintLeaderboardInfo(LeaderboardInfo lb)
         {
-            Console.Write($"{AWSAS($"{lb.stars:0.00}*", 7)}\t | ");
-            Console.Write($"{AWSAS(lb.maxScore.ToString(), 9)}\t | ");
-            Console.Write($"{Truncate(lb.rankedDate.ToString(), 10)}\t | ");
-            Console.Write($"{AWSAE(ResolveDifficultyName(lb.difficulty.difficulty), 10)}\t | ");
-            Console.Write($"{AWSAE(Truncate(lb.levelAuthorName, 20), 20)}\t | ");
-            Console.Write($"{AWSAE(Truncate(lb.songAuthorName, 20), 20)}\t | ");
-            Console.Write($"{lb.songName} {(lb.songSubName.Length != 0 ? $"{lb.songSubName} " : "")}");
-            Console.WriteLine();
+            Print($"{AWSAS($"{lb.stars:0.00}*", 7)}\t | ");
+            Print($"{AWSAS(lb.maxScore.ToString(), 9)}\t | ");
+            Print($"{Truncate(lb.rankedDate.ToString(), 10)}\t | ");
+            Print($"{AWSAS(lb.id.ToString(), 7)} | ");
+            Print($"{AWSAE(ResolveDifficultyName(lb.difficulty.difficulty), 10)}\t | ");
+            Print($"{AWSAE(Truncate(lb.levelAuthorName, 20), 20)}\t | ");
+            Print($"{AWSAE(Truncate(lb.songAuthorName, 20), 20)}\t | ");
+            Print($"{lb.songName} {(lb.songSubName.Length != 0 ? $"{lb.songSubName} " : "")}");
+            Println();
         }
 
         #endregion
@@ -870,19 +949,19 @@ namespace Ouroboros_API
         {
             for (int i = 0; i < scores.Length; i++)
             {
-                Console.Write($"{(i + 1):00}#\t |");
+                Print($"{(i + 1):00}#\t |");
                 PrintScore(scores[i]);
             }
         }
 
-        private static void PrintScore(Score score)
+        public static void PrintScore(Score score)
         {
-            Console.Write($"{score.pp:0.00}pp\t | ");
-            Console.Write($"{AWSAE(score.fullCombo ? "FC" : $"{score.maxCombo} ({score.missedNotes + score.badCuts}x)", 10)}\t ");
-            Console.Write($"{AWSAE($"{AWSAS($"{score.baseScore}", 7)}{(score.modifiers.Length != 0 ? $" {score.modifiers}" : "")}", 13)} | ");
-            Console.Write($"{AWSAS($"{(DateTime.Now - score.timeSet).TotalDays:0.0} days", 10)}\t | ");
-            Console.Write($"{score.leaderboardPlayerInfo.name}");
-            Console.WriteLine();
+            Print($"{score.pp:0.00}pp\t | ");
+            Print($"{AWSAE(score.fullCombo ? "FC" : $"{score.maxCombo} ({score.missedNotes + score.badCuts}x)", 10)}\t ");
+            Print($"{AWSAE($"{AWSAS($"{score.baseScore}", 7)}{(score.modifiers.Length != 0 ? $" {score.modifiers}" : "")}", 13)} | ");
+            Print($"{AWSAS($"{(DateTime.Now - score.timeSet).TotalDays:0.0} days", 10)}\t | ");
+            Print($"{score.leaderboardPlayerInfo.name}");
+            Println();
         }
 
         #endregion
@@ -897,12 +976,12 @@ namespace Ouroboros_API
             }
         }
 
-        private static void PrintPlayer(Player player)
+        public static void PrintPlayer(Player player)
         {
-            Console.Write($"{AWSAS($"{player.rank}#", 7)} {AWSAS($"({player.countryRank}#", 6)}) | ");
-            Console.Write($"{player.scoreStats.averageRankedAccuracy:00.00}% | {AWSAS($"{player.scoreStats.rankedPlayCount}", 5)} | ");
-            Console.Write($"{AWSAS($"{player.pp:0}pp", 8)} | {player.name}");
-            Console.WriteLine();
+            Print($"{AWSAS($"{player.rank}#", 7)} {AWSAS($"({player.countryRank}#", 6)}) | ");
+            Print($"{player.scoreStats.averageRankedAccuracy:00.00}% | {AWSAS($"{player.scoreStats.rankedPlayCount}", 5)} | ");
+            Print($"{AWSAS($"{player.pp:0}pp", 8)} | {player.name}");
+            Println();
         }
 
         #endregion
@@ -922,14 +1001,15 @@ namespace Ouroboros_API
             Score score = playerScore.score;
             LeaderboardInfo leaderboard = playerScore.leaderboard;
 
-            Console.Write($"{AWSAS($"{leaderboard.stars:0.00}*", 7)}\t | {score.pp:0.00}pp ({score.pp * score.weight:0.00}pp)\t | ");
-            Console.Write($"{AWSAE(score.fullCombo ? "FC" : $"{score.maxCombo} ({score.missedNotes + score.badCuts}x)", 12)}");
-            Console.Write($"{AWSAE($"{AWSAS($"{score.baseScore}", 7)}{(score.modifiers.Length != 0 ? $" {score.modifiers}" : "")}", 13)} | "); //
-            Console.Write($"{AWSAS($"{playerScore.accuracy:00.00}%", 7)} | {AWSAS($"{score.rank}#", 6)}  {AWSAS($"{playerScore.relativeRank:0.00}#%", 7)}   | "); //  {AWSAS($"{playerScore.relativeAccuracy:00.00}%%", 8)}
-            Console.Write($"{AWSAS($"{(DateTime.Now - score.timeSet).TotalDays:0.0} days", 10)} | ");
-            Console.Write($"{AWSAE(ResolveDifficultyName(leaderboard.difficulty.difficulty), 10)}\t | ");
-            Console.Write($"{leaderboard.songName} {(leaderboard.songSubName.Length != 0 ? $"{leaderboard.songSubName} " : "")}");
-            Console.WriteLine();
+            Print($"{AWSAS($"{leaderboard.stars:0.00}*", 7)}\t | {score.pp:0.00}pp ({score.pp * score.weight:0.00}pp)\t | ");
+            Print($"{AWSAE(score.fullCombo ? "FC" : $"{score.maxCombo} ({score.missedNotes + score.badCuts}x)", 12)}");
+            Print($"{AWSAE($"{AWSAS($"{score.baseScore}", 7)}{(score.modifiers.Length != 0 ? $" {score.modifiers}" : "")}", 13)} | "); //
+            Print($"{AWSAS($"{playerScore.accuracy:00.00}%", 7)} | {AWSAS($"{score.rank}#", 6)}  {AWSAS($"{playerScore.relativeRank:0.00}#%", 7)}   | "); //  {AWSAS($"{playerScore.relativeAccuracy:00.00}%%", 8)}
+            Print($"{AWSAS($"{(DateTime.Now - score.timeSet).TotalDays:0.0} days", 10)} | ");
+            Print($"{AWSAS(leaderboard.id.ToString(), 7)} | ");
+            Print($"{AWSAE(ResolveDifficultyName(leaderboard.difficulty.difficulty), 10)}\t | ");
+            Print($"{leaderboard.songName} {(leaderboard.songSubName.Length != 0 ? $"{leaderboard.songSubName} " : "")}");
+            Println();
         }
 
         #endregion
@@ -963,4 +1043,6 @@ namespace Ouroboros_API
         #endregion
 
     }
+
+    public enum DataType { SaveData, Configs, Playlists, PlaylistsAndSaveData };
 }

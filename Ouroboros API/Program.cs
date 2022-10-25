@@ -7,11 +7,6 @@ using static Ouroboros_API.Playlists;
 using static Ouroboros_API.Config;
 using System;
 using System.Linq;
-using System.Collections.Generic;
-using System.IO;
-using Ouroboros;
-using Newtonsoft.Json;
-using System.Drawing;
 
 namespace Ouroboros_API
 {
@@ -56,29 +51,41 @@ namespace Ouroboros_API
 
         void Start()
         {
-            Initialize(@"E:\Steam\steamapps\common\Beat Saber\Playlists\");
-            DeletePlaylists();
+            Initialize(@"E:\Steam\steamapps\common\Beat Saber\");
             GenerateOuroborosSet(CptShini);
         }
 
         private static void GenerateOuroborosSet(long id)
         {
-            Config con = LoadConfig(id);
+            ClearData(DataType.Playlists);
 
-            Player player = GetPlayerInfoFull(con.playerId);
+            LoadConfig(id);
+
+            Player player = GetPlayerInfoFull(config.playerId);
             GenerateOuroboros(0, 14);
             GenerateTopPlaysPlaylist(player);
-            GenerateReqPlaylists(player, 0, 14, con.FCReq, con.PlayedReq, true);
+            GenerateReqPlaylists(player, 0, 14);
             int n = 0;
-            for (int i = 0; i < con.snipeList.Length; i++)
-            {
-                if (GenerateSnipeTimePlaylistByID(con.playerId, con.snipeList[i])) n++;
-            }
-            int k = n;
-            if (con.SnipeTime) k += GenerateSnipeTimePlaylists(player, false, con.snipeNum, false);
-            if (con.SongSuggest) GenerateSongSuggest(player, true);
-            GenerateEmptyPlaylists(GetPlaceholderNum(k), @"Sniping\");
-            PrintPlayGraphBMP(player);
+
+            if (config.snipeList.Length > 0) n += GenerateSnipeTargetsPlaylists(player);
+
+            if (config.SnipeTime) n += GenerateSnipeTimePlaylists(player, false, config.snipeNum, false);
+            if (config.SongSuggest) GenerateSongSuggest(player, true);
+            GenerateEmptyPlaylists(n, "Sniping", @"Sniping\");
+
+            if (config.dominancePlaylist) GenerateDominancePlaylist(player);
+            if (config.savePlayGraph) GeneratePlayGraphs();
+
+            if (debugLevel >= DebugLevel.None) Println("Ouroboros has finished running");
+        }
+
+        private static void PrintPlayerScoresAndLeaderboards(long id)
+        {
+            Player player = GetPlayerInfoFull(id);
+            PlayerScore[] scores = GetPlayerScores(player, -1);
+
+            LeaderboardInfo[] leaderboards = GetLeaderboards(new StarRange(0, 14), 0);
+            PrintScoreLeaderboardMix(scores, leaderboards);
         }
 
         private static void GetPrintPlayerScores(long id, bool sortByStars)
@@ -86,64 +93,6 @@ namespace Ouroboros_API
             Player player = GetPlayerInfoFull(id);
             PlayerScore[] scores = GetPlayerScores(player, -1).OrderByDescending(ps => sortByStars ? ps.leaderboard.stars : ps.accuracy).ToArray();
             PrintPlayerScores(scores);
-        }
-
-        private static void PrintPlayGraphBMP(Player player)
-        {
-            PlayerScore[] scores = GetPlayerScores(player, -1).Where(s => s.accuracy >= 80f).ToArray();
-            Bitmap bmp = new Bitmap(1000, 500);
-
-            for (int i = 16; i < 20; i++)
-            {
-                for (int j = 0; j < bmp.Width; j++)
-                {
-                    bmp.SetPixel(j, (int)Remap(i, 16, 20, bmp.Height - 1, 0), Color.Gray);
-                }
-            }
-
-            for (int i = 0; i < 13; i++)
-            {
-                for (int j = 0; j < bmp.Height; j++)
-                {
-                    bmp.SetPixel((int)Remap(i, 0, 13, 0, bmp.Width - 1), j, Color.Gray);
-                }
-            }
-
-            for (int i = 0; i < scores.Length; i++)
-            {
-                float acc = scores[i].accuracy;
-                float stars = scores[i].leaderboard.stars;
-
-                int x, y;
-                x = (int)Remap(stars, 0, 13, 0, bmp.Width - 1);
-                y = (int)Remap(acc, 80, 100, bmp.Height - 1, 0);
-
-                Color c = Color.FromArgb((int)Remap((DateTime.Now - scores[i].score.timeSet).Days, 0, 365, 255, 127), 0, 0);
-
-                if (i <= 10) c = Color.Cyan;
-                else if (i <= 24) c = Color.Green;
-                else if (i <= 50) c = Color.Orange;
-
-                bmp.SetPixel(x, y, c);
-            }
-
-            /*for (int i = 0; i < bmp.Width; i++)
-            {
-                float starVal = Remap(i, 0f, bmp.Width, 0f, 13f);
-
-                float avgAcc = GetAverageAccAtStars(starVal, scores);
-                avgAcc = GetAverageAccAtStars(starVal, scores.Where(ps => ps.accuracy >= avgAcc).ToArray());
-                avgAcc = GetAverageAccAtStars(starVal, scores.Where(ps => ps.accuracy >= avgAcc).ToArray());
-                
-                
-
-                int y = (int)Remap(avgAcc, 80f, 100f, bmp.Height - 1, 0);
-                if (y >= bmp.Height || y < 0) continue;
-                bmp.SetPixel(i, y, Color.White);
-            }*/
-
-            bmp.Save(@$"C:\Users\gabri\Pictures\Beat Saber\{CleanFileName(player.name)}-{player.scoreStats.totalRankedScore}.png");
-            Print("Done!");
         }
 
         public static float GetAverageAccAtStars(float starVal, PlayerScore[] scores)
@@ -164,18 +113,8 @@ namespace Ouroboros_API
             float avgAcc = weightSum >= 1f ? weightedAccSum / weightSum : 0f;
             //float avgAcc = weightedAccSum / weightSum;
 
-            Print($"{starVal:00.0}* | {avgAcc:00.00}% | {weightedAccSum} | {weightSum}");
+            Println($"{starVal:00.0}* | {avgAcc:00.00}% | {weightedAccSum} | {weightSum}");
             return avgAcc;
         }
-    }
-
-    class Map
-    {
-        public LeaderboardInfo map;
-
-        public int count;
-
-        public List<float> scores;
-        public float score;
     }
 }
