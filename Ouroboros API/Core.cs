@@ -15,7 +15,7 @@ namespace Ouroboros_API
     /// </summary>
     public static class Core
     {
-        public static Config config;
+        public static Config Config;
 
         private static int sleepTime = 0;
 
@@ -485,21 +485,21 @@ namespace Ouroboros_API
         /// <param name="rank">The rank you wish to get the name of.</param>
         /// <param name="highestReached">The highest reached rank to compare to.</param>
         /// <returns>A string of the rank formatted in relation to the highest rank reached.</returns>
-        public static string RankName(int rank, int highestReached)
+        public static string AddZeros(int rank, int highestReached)
         {
             int n = highestReached.ToString().Length;
 
             return n switch
             {
-                1 => $"#{rank:0}",
-                2 => $"#{rank:00}",
-                3 => $"#{rank:000}",
-                4 => $"#{rank:0000}",
-                5 => $"#{rank:00000}",
-                6 => $"#{rank:000000}",
-                7 => $"#{rank:0000000}",
-                8 => $"#{rank:00000000}",
-                _ => $"#{rank:0}"
+                1 => $"{rank:0}",
+                2 => $"{rank:00}",
+                3 => $"{rank:000}",
+                4 => $"{rank:0000}",
+                5 => $"{rank:00000}",
+                6 => $"{rank:000000}",
+                7 => $"{rank:0000000}",
+                8 => $"{rank:00000000}",
+                _ => $"{rank:0}"
             };
         }
 
@@ -611,6 +611,47 @@ namespace Ouroboros_API
             return IdPlayerScoreDict;
         }
 
+        public static LeaderboardInfo[] SplitByEldertech(LeaderboardInfo[] maps)
+        {
+            LeaderboardInfo[] normalMaps = maps.Where(lb => (lb.createdDate - DateTime.Parse("01-11-2019")).TotalDays >= 0f).ToArray();
+            LeaderboardInfo[] eldertechMaps = maps.Where(lb => (lb.createdDate - DateTime.Parse("01-11-2019")).TotalDays < 0f).ToArray();
+
+            return AppendArrays(normalMaps, eldertechMaps);
+        }
+
+        private static PlayerScore[] SplitPlaysByAge(PlayerScore[] playerScores)
+        {
+            PlayerScore[] recentMaps = playerScores.Where(ps => (DateTime.Now - ps.score.timeSet).TotalDays < 180f).ToArray();
+            PlayerScore[] oldMaps = playerScores.Where(ps => (DateTime.Now - ps.score.timeSet).TotalDays >= 180f).ToArray();
+
+            return AppendArrays(oldMaps, recentMaps);
+        }
+
+        private static PlayerScore[] SplitPlaysByEldertech(PlayerScore[] playerScores)
+        {
+            PlayerScore[] normalMaps = playerScores.Where(ps => (ps.leaderboard.createdDate - DateTime.Parse("01-11-2019")).TotalDays >= 0f).ToArray();
+            PlayerScore[] eldertechMaps = playerScores.Where(ps => (ps.leaderboard.createdDate - DateTime.Parse("01-11-2019")).TotalDays < 0f).ToArray();
+
+            return AppendArrays(normalMaps, eldertechMaps);
+        }
+
+        private static PlayerScore[] SplitPlaysByBoth(PlayerScore[] playerScores)
+        {
+            PlayerScore[] normalMaps = playerScores.Where(ps => (ps.leaderboard.createdDate - DateTime.Parse("01-11-2019")).TotalDays >= 0f).ToArray();
+            PlayerScore[] eldertechMaps = playerScores.Where(ps => (ps.leaderboard.createdDate - DateTime.Parse("01-11-2019")).TotalDays < 0f).ToArray();
+
+            return AppendArrays(SplitPlaysByAge(normalMaps), SplitPlaysByAge(eldertechMaps));
+        }
+
+        public static PlayerScore[] SplitPlays(PlayerScore[] playerScores)
+        {
+            if (Config.splitByElderTech && !Config.reqPlaylistsSortByAge) return SplitPlaysByEldertech(playerScores);
+            if (!Config.splitByElderTech && Config.reqPlaylistsSortByAge) return SplitPlaysByAge(playerScores);
+            if (Config.splitByElderTech && Config.reqPlaylistsSortByAge) return SplitPlaysByBoth(playerScores);
+
+            return playerScores;
+        }
+
         #endregion
 
         #region Generic Functions
@@ -641,13 +682,22 @@ namespace Ouroboros_API
         /// <returns>An array of type T containing all of the pages contents joined together.</returns>
         public static T[] LoopOverPages<T>(int pageLength, int itemAmount, int startingPage, Func<int, T[]> pageFunction)
         {
-            int pageCount = itemAmount % pageLength > 0 ? itemAmount / pageLength + 1 : itemAmount / pageLength;
+            int itemRemainder = itemAmount % pageLength;
+            bool containsIncompletePage = itemRemainder > 0;
+            int fullPageCount = itemAmount / pageLength;
+
+            int pageCount = containsIncompletePage ? fullPageCount + 1 : fullPageCount;
 
             List<T> itemList = new();
             for (int i = startingPage; i < pageCount + 1; i++)
             {
                 T[] itemPage = pageFunction(i);
-                for (int j = 0; j < (i < pageCount ? pageLength : itemAmount - ((pageCount - 1) * pageLength)); j++)
+
+                bool finalPage = i >= pageCount;
+                int itemsOnPage = finalPage && containsIncompletePage ? itemRemainder : pageLength;
+                if (itemsOnPage > itemPage.Length) itemsOnPage = itemPage.Length;
+
+                for (int j = 0; j < itemsOnPage; j++)
                 {
                     itemList.Add(itemPage[j]);
                 }
@@ -697,7 +747,7 @@ namespace Ouroboros_API
         /// <param name="contents">The actual string to be saved.</param>
         public static void Save(string path, string contents)
         {
-            if (debugLevel >= DebugLevel.Dev) Println($"Saving file at {path}");
+            //if (debugLevel >= DebugLevel.Dev) Println($"Saving file at {path}");
             using StreamWriter sw = File.CreateText(path);
             sw.WriteLine(contents);
         }
@@ -714,7 +764,7 @@ namespace Ouroboros_API
         /// <returns>The data loaded from the text file.</returns>
         public static string? Load(string path)
         {
-            if (debugLevel >= DebugLevel.Dev) Println($"Loading file from {path}");
+            //if (debugLevel >= DebugLevel.Dev) Println($"Loading file from {path}");
             if (!File.Exists(path))
             {
                 if (debugLevel >= DebugLevel.Full) Println($"No file exists at {path}");
@@ -808,13 +858,16 @@ namespace Ouroboros_API
         /// Deletes all contents at a given path.
         /// </summary>
         /// <param name="path">The full path at which to delete all contents.</param>
-        public static void DeleteFolderContents(string path, string ext)
+        public static void DeleteFolderContents(string path, char ext, string search)
         {
             DirectoryInfo di = new DirectoryInfo(path);
             FileInfo[] files = di.GetFiles();
             foreach (FileInfo file in files)
             {
-                string fileExt = file.Name.Split(new[] { '.' }, 2)[1];
+                string[] splitFileName = file.Name.Split(search);
+                if (splitFileName.Length <= 1) continue;
+
+                char fileExt = splitFileName[1][0];
                 if (fileExt != ext) continue;
 
                 file.Delete();
@@ -822,32 +875,35 @@ namespace Ouroboros_API
             if (debugLevel >= DebugLevel.Full) Println("Folder contents deleted successfully");
         }
 
-        public static void ClearData(DataType t)
+        public static void ClearData(DataType t = DataType.AllSaveData)
         {
             switch (t)
             {
-                case DataType.SaveData:
+                case DataType.AllSaveData:
                     if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros API SaveData");
-                    DeleteFolderContents(mainDataPath, "txt");
+                    DeleteFolderContents(mainDataPath, 't', ".");
+                    break;
+                case DataType.Leaderboards:
+                    if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros API Leaderboards SaveData");
+                    DeleteFolderContents(mainDataPath, 'R', "bGVhZGVyYm9hcm");
+                    break;
+                case DataType.LeaderboardScores:
+                    if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros API Leaderboard Score SaveData");
+                    DeleteFolderContents(mainDataPath, 'Q', "bGVhZGVyYm9hcm");
+                    break;
+                case DataType.PlayerScores:
+                    if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros API Player Score SaveData");
+                    DeleteFolderContents(mainDataPath, 'L', "cGxheWVy");
                     break;
                 case DataType.Configs:
                     if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros player configs");
-                    DeleteFolderContents(userDataPath, "json");
+                    DeleteFolderContents(userDataPath, 'j', ".");
                     break;
                 case DataType.Playlists:
                     if (debugLevel >= DebugLevel.Advanced) Println("Clearing playlist folder");
-                    DeleteFolderContents($@"{ouroborosPath}#\", "bplist");
-                    DeleteFolderContents($@"{ouroborosPath}Sniping\", "bplist");
-                    DeleteFolderContents($@"{ouroborosPath}Øuroboros\", "bplist");
-                    break;
-                case DataType.PlaylistsAndSaveData:
-                    if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros API SaveData");
-                    DeleteFolderContents(mainDataPath, "txt");
-
-                    if (debugLevel >= DebugLevel.Advanced) Println("Clearing playlist folder");
-                    DeleteFolderContents($@"{ouroborosPath}#\", "bplist");
-                    DeleteFolderContents($@"{ouroborosPath}Sniping\", "bplist");
-                    DeleteFolderContents($@"{ouroborosPath}Øuroboros\", "bplist");
+                    DeleteFolderContents($@"{ouroborosPath}#\", 'b', ".");
+                    DeleteFolderContents($@"{ouroborosPath}Sniping\", 'b', ".");
+                    DeleteFolderContents($@"{ouroborosPath}Øuroboros\", 'b', ".");
                     break;
                 default:
                     break;
@@ -1014,7 +1070,7 @@ namespace Ouroboros_API
 
         #endregion
 
-        private static string AWSAS(string s, int desiredLength)
+        public static string AWSAS(string s, int desiredLength)
         {
             string result = "";
             for (int i = 0; i < desiredLength - s.Length; i++)
@@ -1023,8 +1079,8 @@ namespace Ouroboros_API
             }
             return result + s;
         }
-        
-        private static string AWSAE(string s, int desiredLength)
+
+        public static string AWSAE(string s, int desiredLength)
         {
             string result = "";
             for (int i = 0; i < desiredLength - s.Length; i++)
@@ -1044,5 +1100,5 @@ namespace Ouroboros_API
 
     }
 
-    public enum DataType { SaveData, Configs, Playlists, PlaylistsAndSaveData };
+    public enum DataType { AllSaveData, Leaderboards, LeaderboardScores, PlayerScores, Configs, Playlists };
 }

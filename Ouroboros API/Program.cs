@@ -4,9 +4,12 @@ using static Ouroboros_API.Core;
 using static Ouroboros_API.Queries;
 using static Ouroboros_API.Sniping;
 using static Ouroboros_API.Playlists;
+using static Ouroboros_API.SongSuggest;
 using static Ouroboros_API.Config;
 using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace Ouroboros_API
 {
@@ -18,14 +21,14 @@ namespace Ouroboros_API
         #region IDs
 
         public const long CptShini = 76561198074878770;
-        public const long Sharkz = 76561198089913211;
+        public const long HypersonicSharkz = 76561198089913211;
         public const long Sensei = 76561198400393482;
         public const long HollowHuu = 76561198104292086;
         public const long Kat = 76561197997028786;
         public const long Zorri = 76561198163644494;
         public const long Jonathan = 76561198216194272;
         public const long Eff3ct = 76561198188430027;
-        public const long Guy = 76561198136806348;
+        public const long SomeGuy = 76561198136806348;
         public const long Viking = 76561198299618436;
         public const long Coreh = 76561198198217778;
         public const long Dark = 76561198030407451;
@@ -43,6 +46,7 @@ namespace Ouroboros_API
         static void Main(string[] args)
         {
             Program program = new();
+            Initialize(@"E:\Steam\steamapps\common\Beat Saber\");
             program.Start();
             Console.ReadKey();
         }
@@ -51,30 +55,36 @@ namespace Ouroboros_API
 
         void Start()
         {
-            Initialize(@"E:\Steam\steamapps\common\Beat Saber\");
-            GenerateOuroborosSet(CptShini);
+            long id = CptShini;
+            LoadConfig(id);
+            GenerateOuroborosSet();
         }
 
-        private static void GenerateOuroborosSet(long id)
+        private static void GenerateOuroborosSet()
         {
             ClearData(DataType.Playlists);
 
-            LoadConfig(id);
-
-            Player player = GetPlayerInfoFull(config.playerId);
+            Player player = GetPlayerInfoFull(Core.Config.playerId);
             GenerateOuroboros(0, 14);
             GenerateTopPlaysPlaylist(player);
             GenerateReqPlaylists(player, 0, 14);
             int n = 0;
 
-            if (config.snipeList.Length > 0) n += GenerateSnipeTargetsPlaylists(player);
+            if (Core.Config.snipeList.Length > 0) n += GenerateSnipeTargetsPlaylists(player);
+            if (Core.Config.SnipeTime) n += GenerateSnipeTimePlaylists(player, false, Core.Config.snipeNum, false);
 
-            if (config.SnipeTime) n += GenerateSnipeTimePlaylists(player, false, config.snipeNum, false);
-            if (config.SongSuggest) GenerateSongSuggest(player, true);
+            if (Core.Config.savePlayGraph) GeneratePlayGraphs();
+            if (Core.Config.SongSuggest)
+            {
+                GenerateSongSuggest(player, 0.5f);
+                GenerateSongSuggest(player, 0f);
+                GenerateSongSuggest(player, -0.5f);
+            }
             GenerateEmptyPlaylists(n, "Sniping", @"Sniping\");
 
-            if (config.dominancePlaylist) GenerateDominancePlaylist(player);
-            if (config.savePlayGraph) GeneratePlayGraphs();
+            
+            if (Core.Config.dominancePlaylist) GenerateDominancePlaylist(player);
+            
 
             if (debugLevel >= DebugLevel.None) Println("Ouroboros has finished running");
         }

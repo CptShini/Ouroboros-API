@@ -16,10 +16,4 @@
     <PackageReference Include="System.Drawing.Common" Version="6.0.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Reference Include="Ouroboros">
-      <HintPath>..\..\Ouroboros\Ouroboros\bin\Release\net6.0\Ouroboros.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-
 </Project>

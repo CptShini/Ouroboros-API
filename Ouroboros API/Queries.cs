@@ -196,7 +196,7 @@ namespace Ouroboros_API
         /// <param name="minAcc">The minimum average ranked accuracy of the player.</param>
         /// <param name="computeAcc">Whether or not to calculate the average ranked accuracy of the players top 50 scores, and use said value instead.</param>
         /// <returns>An array of filtered players fitting the given criteria.</returns>
-        public static Player[] GetFilteredPlayers(string countryCode, int rankFrom, int rankTo, float minAcc, bool computeAcc)
+        public static Player[] GetFilteredPlayers(string countryCode, int rankFrom, int rankTo, float minAcc, float maxAcc, bool computeAcc)
         {
             if (debugLevel >= DebugLevel.Advanced) Println($"Retriving filtered leaderboards for {(countryCode.Length > 0 ? $"{countryCode} " : "")}ranks {rankFrom} through {rankTo}{(minAcc > 0 ? $" with min. avg. {(computeAcc ? "computed" : "")} acc being {minAcc:00.00}%" : "")}");
             Player[] players = GetPlayersByRank(countryCode, rankFrom, rankTo);
@@ -206,7 +206,7 @@ namespace Ouroboros_API
             if (debugLevel >= DebugLevel.Advanced) Println("Filtering out players that dont fit criteria");
             foreach (Player player in players)
             {
-                if (player.scoreStats.averageRankedAccuracy >= minAcc) filteredPlayers.Add(player);
+                if (player.scoreStats.averageRankedAccuracy >= minAcc && player.scoreStats.averageRankedAccuracy <= maxAcc) filteredPlayers.Add(player);
             }
 
             if (debugLevel >= DebugLevel.Advanced) Println("Finished filtering out players");
@@ -360,10 +360,10 @@ namespace Ouroboros_API
             PlayerScoreCollection psc = GetPlayerScoresPage(1, player, totalCount, true, LastXNumbers(player.scoreStats.totalRankedScore, 9));
             PlayerScore[] func(int page) => GetPlayerScoresPage(page, player, totalCount, true, LastXNumbers(player.scoreStats.totalRankedScore, 9)).playerScores;
             PlayerScore[] playerScores = LoopOverPages(psc.metadata.itemsPerPage, totalCount, 2, func);
-
+            
             if (debugLevel >= DebugLevel.Dev) Println($"Finished retriving {totalCount} scores for player {player.name}");
             playerScores = AppendArrays(psc.playerScores, playerScores);
-
+            
             for (int i = 0; i < playerScores.Length; i++)
             {
                 PlayerScore score = playerScores[i];
@@ -373,7 +373,7 @@ namespace Ouroboros_API
                     score.leaderboard.maxScore = incorrectMaxScoreMaps[score.leaderboard.id];
                 }
             }
-
+            
             playerScores = UpdatePlayerScores(playerScores);
             
             return playerScores;

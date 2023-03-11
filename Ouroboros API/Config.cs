@@ -15,9 +15,10 @@ namespace Ouroboros_API
         public long playerId;
         public bool FCReq = true;
         public bool PlayedReq = false;
-        public bool reqPlaylistsSortByAge = false;
+        public bool reqPlaylistsSortByAge = true;
         public bool splitByElderTech = true;
         public bool SongSuggest = false;
+        public bool ssRemoveAlreadyBeat = true;
         public bool SnipeTime = false;
         public int snipeNum = 10;
         public long[] snipeList;
@@ -50,7 +51,7 @@ namespace Ouroboros_API
             Config c = DeserializeString<Config>(data);
             c.SaveConfig();
 
-            config = c;
+            Core.Config = c;
             return c;
         }
 

@@ -8,7 +8,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Drawing;
 using System.IO;
-using System.Xml.Linq;
 
 namespace Ouroboros_API
 {
@@ -39,7 +38,7 @@ namespace Ouroboros_API
             float acc = GetAverageAcc(sniperScores.Take(50).ToArray()) - 0.5f;
 
             if (debugLevel >= DebugLevel.Advanced) Println("Retriving players that fit criteria");
-            Player[] filteredPlayers = GetFilteredPlayers(countryCode, from, to, acc, true).Where(p => p.scoreStats.rankedPlayCount >= 100).Reverse().ToArray();
+            Player[] filteredPlayers = GetFilteredPlayers(countryCode, from, to, acc, acc + 1f, true).Where(p => p.scoreStats.rankedPlayCount >= 100).Reverse().ToArray();
 
             if (debugLevel >= DebugLevel.Advanced) Println("Generating Snipe Time playlists for filtered players");
 
@@ -77,7 +76,7 @@ namespace Ouroboros_API
             string name = snipedPlayer.name;
             int rank = local ? snipedPlayer.countryRank : snipedPlayer.rank;
 
-            string title = $"({RankName(rank, highestRank)}/{snipedPlayer.scoreStats.averageRankedAccuracy:00.00}%) {name}{(ppGain == -1f ? "" : $" ({ppGain:0.00}pp)")}";
+            string title = $"(#{AddZeros(rank, highestRank)}/{snipedPlayer.scoreStats.averageRankedAccuracy:00.00}%) {name}{(ppGain == -1f ? "" : $" ({ppGain:0.00}pp)")}";
             string path = @"Sniping\";
 
 
@@ -88,12 +87,12 @@ namespace Ouroboros_API
 
         public static int GenerateSnipeTargetsPlaylists(Player sniper)
         {
-            if (debugLevel >= DebugLevel.None) Println($"Generating {config.snipeList.Length} snipe playlists for {config.playerName}");
+            if (debugLevel >= DebugLevel.None) Println($"Generating {Core.Config.snipeList.Length} snipe playlists for {Core.Config.playerName}");
 
             PlayerScore[] sniperScores = GetPlayerScores(sniper, -1);
 
             List<Player> snipeTargets = new List<Player>();
-            config.snipeList.ToList().ForEach(id => snipeTargets.Add(GetPlayerInfoFull(id)));
+            Core.Config.snipeList.ToList().ForEach(id => snipeTargets.Add(GetPlayerInfoFull(id)));
 
             Dictionary<Player, PlayerScore[]> snipeTargetsDic = new Dictionary<Player, PlayerScore[]>();
 
@@ -109,13 +108,18 @@ namespace Ouroboros_API
                 if (snipedScores.Length > 0) snipeTargetsDic.Add(sniped, snipedScores);
             }
 
+            int highestPP = (int)snipeTargetsDic.Keys.Select(p => p.pp).Max();
             int highestRank = snipeTargetsDic.Keys.Select(p => p.rank).Max();
             for (int i = 0; i < snipeTargetsDic.Count; i++)
             {
                 Player sniped = snipeTargetsDic.Keys.ElementAt(i);
                 if (debugLevel >= DebugLevel.Basic) Println($"Generating Snipe Time playlist for {sniped.name}");
 
-                string title = $"Ø ({RankName(sniped.rank, highestRank)}/{sniped.scoreStats.averageRankedAccuracy:00.00}%) {sniped.name}";
+                string stats = $"({AddZeros((int)sniped.pp, highestPP)}pp | (#{AddZeros(sniped.rank, highestRank)}/#{sniped.countryRank}) @ {sniped.scoreStats.averageRankedAccuracy:00.00}%)";
+                string identifier = $"{sniped.name}";
+                string ppGain = $"({CalculatePPGainForRaw(snipeTargetsDic[sniped], sniperScores):0.00}pp)";
+
+                string title = $"Ø {stats} {identifier} {ppGain}";
 
                 if (GenerateBPList(title, @"Sniping\", ConvertPlayerScoreToLeaderboard(snipeTargetsDic[sniped]))) n++;
             }
@@ -150,12 +154,16 @@ namespace Ouroboros_API
         public static void GenerateTopPlaysPlaylist(Player player)
         {
             string name = player.name;
-            string title = $"{name} Top plays";
-            string path = @"#\";
 
             if (debugLevel >= DebugLevel.Basic) Println($"Generating top plays playlist for {name}\n");
 
-            LeaderboardInfo[] topPlayMaps = ConvertPlayerScoreToLeaderboard(GetPlayerScores(player, -1));
+            PlayerScore[] scores = GetPlayerScores(player, -1);
+            LeaderboardInfo[] topPlayMaps = ConvertPlayerScoreToLeaderboard(scores);
+
+            float avgAccuracy = GetAverageAcc(scores.Take(50).ToArray());
+
+            string title = $"{name} @ {avgAccuracy:00.00}% Top plays";
+            string path = @"#\";
 
             GenerateBPList(title, path, topPlayMaps);
         }
@@ -223,7 +231,7 @@ namespace Ouroboros_API
 
                 if (starScores.Length == 0) continue;
 
-                if (config.FCReq)
+                if (Core.Config.FCReq)
                 {
                     if (!GenerateNonFCPlaylist(starScores, stars))
                     {
@@ -234,7 +242,7 @@ namespace Ouroboros_API
                 }
                 else if (!GenerateNonFCPlaylist(starScores, stars)) n++;
 
-                if (config.PlayedReq)
+                if (Core.Config.PlayedReq)
                 {
                     if (!GenerateNotPlayedPlaylist(starScores, stars))
                     {
@@ -307,12 +315,7 @@ namespace Ouroboros_API
 
             maps = maps.Where(m => !playerScores.Any(ps => ps.leaderboard.id == m.id)).Reverse().ToArray();
 
-            if (config.splitByElderTech)
-            {
-                LeaderboardInfo[] normalMaps = maps.Where(lb => (lb.createdDate - DateTime.Parse("01-11-2019")).TotalDays >= 0f).ToArray();
-                LeaderboardInfo[] eldertechMaps = maps.Where(lb => (lb.createdDate - DateTime.Parse("01-11-2019")).TotalDays < 0f).ToArray();
-                maps = AppendArrays(normalMaps, eldertechMaps);
-            }
+            if (Core.Config.splitByElderTech) maps = SplitByEldertech(maps);
 
             string title = $"{stars.name} not played";
             if (GenerateBPList(title, @"Øuroboros\", maps))
@@ -331,21 +334,8 @@ namespace Ouroboros_API
         public static bool GenerateNonFCPlaylist(PlayerScore[] playerScores, StarRange stars)
         {
             playerScores = playerScores.Where(ps => !ps.score.fullCombo).ToArray();
-            if (config.splitByElderTech)
-            {
-                PlayerScore[] normalMaps = playerScores.Where(ps => (ps.leaderboard.createdDate - DateTime.Parse("01-11-2019")).TotalDays >= 0f).ToArray();
-                PlayerScore[] eldertechMaps = playerScores.Where(ps => (ps.leaderboard.createdDate - DateTime.Parse("01-11-2019")).TotalDays < 0f).ToArray();
 
-                PlayerScore[] recentMaps = normalMaps.Where(ps => (DateTime.Now - ps.score.timeSet).TotalDays < 180f).ToArray();
-                PlayerScore[] oldMaps = normalMaps.Where(ps => (DateTime.Now - ps.score.timeSet).TotalDays >= 180f).ToArray();
-                playerScores = AppendArrays(AppendArrays(oldMaps, recentMaps), eldertechMaps);
-            }
-            else
-            {
-                PlayerScore[] recentMaps = playerScores.Where(ps => (DateTime.Now - ps.score.timeSet).TotalDays < 180f).ToArray();
-                PlayerScore[] oldMaps = playerScores.Where(ps => (DateTime.Now - ps.score.timeSet).TotalDays >= 180f).ToArray();
-                playerScores = AppendArrays(oldMaps, recentMaps);
-            }
+            playerScores = SplitPlays(playerScores);
 
             string title = $"{stars.name} non FC";
             if (GenerateBPList(title, @"Øuroboros\", ConvertPlayerScoreToLeaderboard(playerScores.ToArray())))
@@ -380,7 +370,7 @@ namespace Ouroboros_API
 
             string title = $"{stars.name} #% <{lowestAcc:00.00}";
             if (debugLevel >= DebugLevel.Basic) Println($"Generating Ouroboros Req playlist {title} of length {scores.Count}");
-            return GenerateBPList(title, @"Øuroboros\", ConvertPlayerScoreToLeaderboard(config.reqPlaylistsSortByAge ? scores.OrderBy(ps => ps.score.timeSet).ToArray() : scores.ToArray()));
+            return GenerateBPList(title, @"Øuroboros\", ConvertPlayerScoreToLeaderboard(SplitPlays(scores.ToArray())));
             //GenerateBPList($"{stars.name} Best #%", @"Øuroboros\", ConvertPlayerScoreToLeaderboard(playerScores.OrderByDescending(ps => ps.accuracy).ToArray()));
         }
 
@@ -404,7 +394,7 @@ namespace Ouroboros_API
 
             string title = $"{stars.name} %% <{lowestAcc:00.00}";
             if (debugLevel >= DebugLevel.Basic) Println($"Generating Ouroboros Req playlist {title} of length {scores.Count}");
-            return GenerateBPList(title, @"Øuroboros\", ConvertPlayerScoreToLeaderboard(config.reqPlaylistsSortByAge ? scores.OrderBy(ps => ps.score.timeSet).ToArray() : scores.ToArray()));
+            return GenerateBPList(title, @"Øuroboros\", ConvertPlayerScoreToLeaderboard(SplitPlays(scores.ToArray())));
             //GenerateBPList($"{stars.name} Best %%", @"Øuroboros\", ConvertPlayerScoreToLeaderboard(playerScores.OrderByDescending(ps => ps.relativeAccuracy).ToArray()));
         }
 
@@ -432,7 +422,7 @@ namespace Ouroboros_API
 
             string title = $"{stars.name} ## >{lowestRank}";
             if (debugLevel >= DebugLevel.Basic) Println($"Generating Ouroboros Req playlist {title} of length {scores.Count}");
-            return GenerateBPList(title, @"Øuroboros\", ConvertPlayerScoreToLeaderboard(config.reqPlaylistsSortByAge ? scores.OrderBy(ps => ps.score.timeSet).ToArray() : scores.ToArray()));
+            return GenerateBPList(title, @"Øuroboros\", ConvertPlayerScoreToLeaderboard(SplitPlays(scores.ToArray())));
             //GenerateBPList($"{stars.name} Best ##", @"Øuroboros\", ConvertPlayerScoreToLeaderboard(playerScores.OrderBy(ps => ps.score.rank).ToArray()));
         }
 
@@ -460,7 +450,7 @@ namespace Ouroboros_API
 
             string title = $"{stars.name} %# >{lowestRel:00.0}";
             if (debugLevel >= DebugLevel.Basic) Println($"Generating Ouroboros Req playlist {title} of length {scores.Count}");
-            return GenerateBPList(title, @"Øuroboros\", ConvertPlayerScoreToLeaderboard(config.reqPlaylistsSortByAge ? scores.OrderBy(ps => ps.score.timeSet).ToArray() : scores.ToArray()));
+            return GenerateBPList(title, @"Øuroboros\", ConvertPlayerScoreToLeaderboard(SplitPlays(scores.ToArray())));
             //GenerateBPList($"{stars.name} Best %#", @"Øuroboros\", ConvertPlayerScoreToLeaderboard(playerScores.OrderBy(ps => ps.relativeRank).ToArray()));
         }
 
@@ -477,78 +467,6 @@ namespace Ouroboros_API
         }
 
         #endregion
-
-        public static void GenerateSongSuggest(Player player, bool removeAlreadyBeat)
-        {
-            int rank = player.rank;
-            PlayerScore[] userScores = GetPlayerScores(player, -1);
-            float targetAccuracy = GetAverageAcc(userScores.Take(50).ToArray()) + 0.5f;
-
-            if (debugLevel >= DebugLevel.None) Println($"Generating song suggestion playlist for {player.name} at {targetAccuracy:0.00}% avg acc{(removeAlreadyBeat ? " removing already FC'ed maps" : "")}");
-
-            List<PlayerScore[]> playerScores = new List<PlayerScore[]>();
-            Player[] players = GetPlayersByRank("", (int)(rank / 1.2f), (int)(rank * 1.2f));
-
-            if (debugLevel >= DebugLevel.Basic) Println($"Gettings top 50 scores for {players.Length} players; T-{GetTimeEstimate(players.Length, 460)}");
-            for (int i = 0; i < players.Length; i++)
-            {
-                PlayerScore[] scores = GetPlayerScores(players[i], 50);
-                playerScores.Add(scores);
-            }
-
-            List<Map> mapList = new List<Map>();
-            foreach (PlayerScore[] scores in playerScores)
-            {
-                for (int i = 0; i < scores.Length; i++)
-                {
-                    PlayerScore play = scores[i];
-                    float d = play.accuracy - targetAccuracy;
-
-                    if (MathF.Abs(d) > 2) continue;
-
-                    float score = (MathF.Pow(50 - i, 1.5f) / 10) * (1 - d * d / 4);
-
-                    LeaderboardInfo lb = play.leaderboard;
-
-                    if (mapList.Exists(map => map.map.id == lb.id))
-                    {
-                        Map m = mapList.Where(map => map.map.id == lb.id).ToArray()[0];
-
-                        m.count++;
-                        m.scores.Add(score);
-                    }
-                    else
-                    {
-                        Map m = new Map()
-                        {
-                            map = lb,
-                            count = 1,
-                            scores = new List<float>()
-                        };
-                        m.scores.Add(score);
-                        mapList.Add(m);
-                    }
-
-                }
-            }
-            foreach (Map map in mapList)
-            {
-                for (int i = 0; i < map.scores.Count; i++)
-                {
-                    map.score += map.scores[i] * MathF.Pow(0.955f, i);
-                }
-
-            }
-
-            mapList = mapList.OrderByDescending(m => m.score).ToList();
-
-            LeaderboardInfo[] maps = mapList.Select(map => map.map).ToArray();
-            if (removeAlreadyBeat) maps = maps.Where(lb => !userScores.Where(ps => ps.score.fullCombo).Any(ps => ps.leaderboard.id == lb.id)).ToArray();
-
-
-            GenerateBPList($"Top 100 maps for {player.name} @ {targetAccuracy:00.00}%", @"Øuroboros\", maps.Take(100).ToArray());
-            if (debugLevel >= DebugLevel.Basic) Println("Finished generating song suggestion playlist\n");
-        }
 
         public static void GenerateDominancePlaylist(Player player)
         {
@@ -590,19 +508,22 @@ namespace Ouroboros_API
             }
 
             string title = $"Dominance in {countryCode} @ #{minRank}";
-            GenerateBPList(title, @"Øuroboros\", ConvertPlayerScoreToLeaderboard(playerScores.OrderByDescending(ps => ps.leaderboard.stars).ToArray()));
+
+            playerScores = playerScores.OrderBy(ps => ps.leaderboard.stars).ToList();
+            LeaderboardInfo[] maps = SplitByEldertech(ConvertPlayerScoreToLeaderboard(playerScores.ToArray()));
+            GenerateBPList(title, @"Øuroboros\", maps);
 
             if (debugLevel >= DebugLevel.Advanced) Println($"Finished generating dominance playlist in {countryCode}");
         }
 
         public static void GeneratePlayGraphs()
         {
-            Player player = GetPlayerInfoFull(config.playerId);
+            Player player = GetPlayerInfoFull(Core.Config.playerId);
             SavePlayGraphBMP(player);
 
-            for (int i = 0; i < config.snipeList.Length; i++)
+            for (int i = 0; i < Core.Config.snipeList.Length; i++)
             {
-                Player p = GetPlayerInfoFull(config.snipeList[i]);
+                Player p = GetPlayerInfoFull(Core.Config.snipeList[i]);
                 SavePlayGraphBMP(p);
             }
         }
@@ -669,15 +590,5 @@ namespace Ouroboros_API
             if (debugLevel >= DebugLevel.Advanced) Println($"Finished creating playgraph for {player.name}");
         }
 
-    }
-
-    class Map
-    {
-        public LeaderboardInfo map;
-
-        public int count;
-
-        public List<float> scores;
-        public float score;
     }
 }
