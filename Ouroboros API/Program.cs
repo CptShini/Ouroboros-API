@@ -16,6 +16,8 @@ namespace Ouroboros_API
     class Program
     {
 
+        private const string _beatSaberPath = @"E:\Steam\steamapps\common\Beat Saber\";
+
         #region Variables & Main
 
         #region IDs
@@ -46,7 +48,7 @@ namespace Ouroboros_API
         static void Main(string[] args)
         {
             Program program = new();
-            Initialize(@"E:\Steam\steamapps\common\Beat Saber\");
+            Initialize(_beatSaberPath);
             program.Start();
             Console.ReadKey();
         }
