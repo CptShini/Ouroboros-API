@@ -1,12 +1,11 @@
-﻿using System;
-
-namespace Ouroboros_API.ScoreSaberClasses
+﻿namespace OuroborosLibrary.ScoreSaberClasses
 {
     /// <summary>
     /// A Class containing all information relevant to a leaderboard, aka. a map.
     /// </summary>
     public class LeaderboardInfo : IEquatable<LeaderboardInfo>
     {
+        #region ScoreSaber Stuff
 
         /// <summary>
         /// The ID of the map; ID varies depending on selected difficulty, hash does not!
@@ -94,6 +93,11 @@ namespace Ouroboros_API.ScoreSaberClasses
         public float stars { get; set; }
 
         /// <summary>
+        /// Whether or not the map allows positive modifiers.
+        /// </summary>
+        public bool positiveModifiers { get; set; }
+
+        /// <summary>
         /// The total number of plays on the map.
         /// </summary>
         public int plays { get; set; }
@@ -102,11 +106,6 @@ namespace Ouroboros_API.ScoreSaberClasses
         /// The number of daily plays on the map.
         /// </summary>
         public int dailyPlays { get; set; }
-
-        /// <summary>
-        /// Whether or not the map allows positive modifiers.
-        /// </summary>
-        public bool positiveModifiers { get; set; }
 
         /// <summary>
         /// The link to the maps cover image.
@@ -123,22 +122,60 @@ namespace Ouroboros_API.ScoreSaberClasses
         /// </summary>
         public Difficulty[] difficulties { get; set; }
 
+        #endregion
 
+        #region Custom Stuff
+
+        public string DifficultyName { get; private set; }
+        public string BeatmapName { get; private set; }
+        public string MapPlaylistString => GetSongString();
+
+        internal void UpdateMapInfo()
+        {
+            DifficultyName = ResolveDifficultyName(difficulty.difficulty);
+            BeatmapName = $"{songName} ({DifficultyName})";
+        }
+
+        private string GetSongString()
+        {
+            string result =
+                "    {\n" +
+               $"      \"hash\": \"{songHash}\",\n" +
+                "      \"difficulties\": [\n" +
+                "        {\n" +
+                "          \"characteristic\": \"Standard\",\n" +
+               $"          \"name\": \"{DifficultyName}\"\n" +
+                "        }\n" +
+                "      ]\n" +
+                "    },\n";
+
+            return result;
+        }
 
         /// <summary>
-        /// !!!CUSTOM MADE!!! Song string containing both the name of the map and its difficulty.
+        /// Resolves what the name of a given difficulty is. (1 = Easy, 3 = Normal, 5 = Hard, 7 = Expert, 9 = Expert+)
         /// </summary>
-        public string songNameWDiff;
-
-
-        public bool Equals(LeaderboardInfo other)
+        /// <param name="diff">The number corrosponding to a given difficulty. (1 = Easy, 3 = Normal, 5 = Hard, 7 = Expert, 9 = Expert+)</param>
+        /// <returns>The corrosponding difficulty name.</returns>
+        private static string ResolveDifficultyName(int diff)
         {
-            return id == other.id;
+            return diff switch
+            {
+                1 => "Easy",
+                3 => "Normal",
+                5 => "Hard",
+                7 => "Expert",
+                9 => "ExpertPlus",
+                _ => "Broken",
+            };
         }
 
-        public override int GetHashCode()
-        {
-            return id.GetHashCode();
-        }
+        public bool Equals(LeaderboardInfo? other) => id == other?.id;
+
+        public override int GetHashCode() => id.GetHashCode();
+
+        public override bool Equals(object? obj) => Equals(obj as LeaderboardInfo);
+
+        #endregion
     }
 }

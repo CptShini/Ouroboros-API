@@ -1,5 +1,5 @@
 ﻿using Ouroboros_API.ScoreSaberClasses;
-using static Ouroboros_API.DebugManager;
+using static Ouroboros_API.Legacy.DebugManager;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -8,14 +8,14 @@ using System.Linq;
 using System.Net;
 using System.Diagnostics;
 
-namespace Ouroboros_API
+namespace Ouroboros_API.Legacy
 {
     /// <summary>
     /// A library containing all underlying core functions used to operate, communicate, and handle aspects of the ScoreSaber API.
     /// </summary>
     public static class Core
     {
-        public static Config Config;
+        internal static Config Config;
 
         private static int sleepTime = 0;
 
@@ -60,7 +60,7 @@ namespace Ouroboros_API
         /// <param name="playlistPath">The path to the players Beat Saber playlist directory.</param>
         public static void Initialize(string beatSaberLoc)
         {
-            if (debugLevel >= DebugLevel.Basic) Println("Initializing Program");
+            DebugPrint(DebugLevel.Basic, "Initializing Program");
             beatSaberPath = beatSaberLoc;
             userDataPath = $@"{beatSaberPath}UserData\Ouroboros\";
             mainDataPath = $@"{userDataPath}SaveLoadData\";
@@ -75,7 +75,7 @@ namespace Ouroboros_API
         /// </summary>
         private static void CreateRequiredFolders()
         {
-            if (debugLevel >= DebugLevel.Full) Println("Creating required folders if they do not already exist");
+            DebugPrint(DebugLevel.Full, "Creating required folders if they do not already exist");
             Directory.CreateDirectory(mainDataPath);
 
             Directory.CreateDirectory($@"{ouroborosPath}#\");
@@ -126,7 +126,7 @@ namespace Ouroboros_API
             if (sleepTime > 0) System.Threading.Thread.Sleep(sleepTime);
             timer.Stop();
 
-            if (debugLevel >= DebugLevel.Dev) Println($"Get-Request ({timer.ElapsedMilliseconds}ms): {APIBaseUrl}{url}");
+            DebugPrint(DebugLevel.Dev, $"Get-Request ({timer.ElapsedMilliseconds}ms): {APIBaseUrl}{url}");
             return result;
         }
 
@@ -156,16 +156,16 @@ namespace Ouroboros_API
         /// <returns>True, if playlist generation was successful. False, if playlist wasn't generated.</returns>
         public static bool GenerateBPList(string title, string path, LeaderboardInfo[] maps)
         {
-            if (maps.Length <= 0 && !title.Contains("placeholder")) { if (debugLevel >= DebugLevel.Advanced) Println("Failed to create playlist. Maps array of length 0"); return false; }
+            if (maps.Length <= 0 && !title.Contains("placeholder")) { DebugPrint(DebugLevel.Advanced, "Failed to create playlist. Maps array of length 0"); return false; }
             
             string contents = GetPlaylistString(title, "Ouroboros", maps);
             string salt = $" ({Base64Encode(DateTime.Now.Millisecond.ToString())})";
             title = CleanFileName(title + salt);
             path = $"{ouroborosPath}{path}{title}.bplist";
 
-            if (debugLevel >= DebugLevel.Advanced) Println($"Creating playlist called {title} with length {maps.Length}");
+            DebugPrint(DebugLevel.Advanced, $"Creating playlist called {title} with length {maps.Length}");
             Save(path, contents);
-            if (debugLevel >= DebugLevel.Full) Println("Finished creating playlist");
+            DebugPrint(DebugLevel.Full, "Finished creating playlist");
             return true;
         }
 
@@ -229,8 +229,10 @@ namespace Ouroboros_API
         /// <returns>The cleaned file name.</returns>
         public static string CleanFileName(string fileName)
         {
-            fileName = fileName.Replace("ツ", "");
-            return Path.GetInvalidFileNameChars().Aggregate(fileName, (current, c) => current.Replace(c.ToString(), string.Empty));
+            List<char> illegalCharacters = Path.GetInvalidFileNameChars().ToList();
+            illegalCharacters.AddRange("ツ❤.");
+
+            return illegalCharacters.Aggregate(fileName, (current, c) => current.Replace(c.ToString(), string.Empty));
         }
 
         #endregion
@@ -296,9 +298,13 @@ namespace Ouroboros_API
 
         public static int GetPlaceholderNum(int n)
         {
-            return (n % 5) > 0 ? 5 - (n % 5) : 0;
+            int idk = n % 5;
+            bool asd = idk > 0;
+            int hmm = 5 - idk;
+
+            return asd ? hmm : 0;
         }
-        
+
         public static float CalculatePPGainForRaw(float pp, PlayerScore[] scores)
         {
             PlayerScore ppScore = new PlayerScore();
@@ -363,10 +369,7 @@ namespace Ouroboros_API
             return ((float)score.rank - 1) / leaderboard.plays * 100;
         }
 
-        public static string GetSongNameWDiff(LeaderboardInfo leaderboard)
-        {
-            return $"{leaderboard.songName} ({ResolveDifficultyName(leaderboard.difficulty.difficulty)})";
-        }
+        public static string GetSongNameWDiff(LeaderboardInfo leaderboard) => $"{leaderboard.songName} ({ResolveDifficultyName(leaderboard.difficulty.difficulty)})";
 
         public static string GetTimeEstimate(int n, int w)
         {
@@ -396,7 +399,7 @@ namespace Ouroboros_API
 
             result.ForEach(ps => ps.accuracy = GetAccuracy(ps.leaderboard, ps.score));
             result.ForEach(ps => ps.relativeRank = GetRelativeRank(ps.leaderboard, ps.score));
-            result.ForEach(ps => ps.leaderboard.songNameWDiff = GetSongNameWDiff(ps.leaderboard));
+            result.ForEach(ps => ps.leaderboard.beatmapName = GetSongNameWDiff(ps.leaderboard));
 
             return result.ToArray();
         }
@@ -619,23 +622,23 @@ namespace Ouroboros_API
             return AppendArrays(normalMaps, eldertechMaps);
         }
 
-        private static PlayerScore[] SplitPlaysByAge(PlayerScore[] playerScores)
+        public static PlayerScore[] SplitPlaysByAge(PlayerScore[] playerScores)
         {
             PlayerScore[] recentMaps = playerScores.Where(ps => (DateTime.Now - ps.score.timeSet).TotalDays < 180f).ToArray();
             PlayerScore[] oldMaps = playerScores.Where(ps => (DateTime.Now - ps.score.timeSet).TotalDays >= 180f).ToArray();
 
-            return AppendArrays(oldMaps, recentMaps);
+            return Config.ReqPlaylistsSortByAge ? AppendArrays(oldMaps, recentMaps) : playerScores;
         }
 
-        private static PlayerScore[] SplitPlaysByEldertech(PlayerScore[] playerScores)
+        public static PlayerScore[] SplitPlaysByEldertech(PlayerScore[] playerScores)
         {
             PlayerScore[] normalMaps = playerScores.Where(ps => (ps.leaderboard.createdDate - DateTime.Parse("01-11-2019")).TotalDays >= 0f).ToArray();
             PlayerScore[] eldertechMaps = playerScores.Where(ps => (ps.leaderboard.createdDate - DateTime.Parse("01-11-2019")).TotalDays < 0f).ToArray();
 
-            return AppendArrays(normalMaps, eldertechMaps);
+            return Config.SplitByElderTech ? AppendArrays(normalMaps, eldertechMaps) : playerScores;
         }
 
-        private static PlayerScore[] SplitPlaysByBoth(PlayerScore[] playerScores)
+        public static PlayerScore[] SplitPlaysByBoth(PlayerScore[] playerScores)
         {
             PlayerScore[] normalMaps = playerScores.Where(ps => (ps.leaderboard.createdDate - DateTime.Parse("01-11-2019")).TotalDays >= 0f).ToArray();
             PlayerScore[] eldertechMaps = playerScores.Where(ps => (ps.leaderboard.createdDate - DateTime.Parse("01-11-2019")).TotalDays < 0f).ToArray();
@@ -645,9 +648,9 @@ namespace Ouroboros_API
 
         public static PlayerScore[] SplitPlays(PlayerScore[] playerScores)
         {
-            if (Config.splitByElderTech && !Config.reqPlaylistsSortByAge) return SplitPlaysByEldertech(playerScores);
-            if (!Config.splitByElderTech && Config.reqPlaylistsSortByAge) return SplitPlaysByAge(playerScores);
-            if (Config.splitByElderTech && Config.reqPlaylistsSortByAge) return SplitPlaysByBoth(playerScores);
+            if (Config.SplitByElderTech && !Config.ReqPlaylistsSortByAge) return SplitPlaysByEldertech(playerScores);
+            if (!Config.SplitByElderTech && Config.ReqPlaylistsSortByAge) return SplitPlaysByAge(playerScores);
+            if (Config.SplitByElderTech && Config.ReqPlaylistsSortByAge) return SplitPlaysByBoth(playerScores);
 
             return playerScores;
         }
@@ -747,7 +750,7 @@ namespace Ouroboros_API
         /// <param name="contents">The actual string to be saved.</param>
         public static void Save(string path, string contents)
         {
-            //if (debugLevel >= DebugLevel.Dev) Println($"Saving file at {path}");
+            //DebugPrint(DebugLevel.Dev, $"Saving file at {path}");
             using StreamWriter sw = File.CreateText(path);
             sw.WriteLine(contents);
         }
@@ -761,16 +764,20 @@ namespace Ouroboros_API
         /// Loads data from text file at given path.
         /// </summary>
         /// <param name="path">The full path from which to load data.</param>
+        /// <param name="result"></param>
         /// <returns>The data loaded from the text file.</returns>
-        public static string? Load(string path)
+        public static bool Load(string path, out string result)
         {
-            //if (debugLevel >= DebugLevel.Dev) Println($"Loading file from {path}");
-            if (!File.Exists(path))
+            DebugPrint(DebugLevel.Dev, $"Loading file from {path}");
+            if (File.Exists(path))
             {
-                if (debugLevel >= DebugLevel.Full) Println($"No file exists at {path}");
-                return null;
+                result = File.ReadAllText(path);
+                return true;
             }
-            return File.ReadAllText(path);
+            
+            DebugPrint(DebugLevel.Full, $"No file exists at {path}");
+            result = "";
+            return false;
         }
 
         #endregion
@@ -798,8 +805,8 @@ namespace Ouroboros_API
                     loadedData = true;
                     string dataType = ResolveTargetURLDataType(targetURL);
                     TimeSpan age = DateTime.Now - file.LastWriteTime;
-                    result = Load(mainDataPath + file.Name);
-                    
+                    Load(mainDataPath + file.Name, out result);
+
                     switch (dataType)
                     {
                         case "leaderboards":
@@ -826,7 +833,7 @@ namespace Ouroboros_API
                     if (!loadedData)
                     {
                         file.Delete();
-                        if (debugLevel >= DebugLevel.Dev) Println("Deleting data! Either out of sync or too old");
+                        DebugPrint(DebugLevel.Dev, "Deleting data! Either out of sync or too old");
                     }
                 }
             }
@@ -839,7 +846,7 @@ namespace Ouroboros_API
         /// </summary>
         public static void RenewAllData()
         {
-            if (debugLevel >= DebugLevel.Basic) Println("Renewing all data");
+            DebugPrint(DebugLevel.Basic, "Renewing all data");
             DirectoryInfo di = new DirectoryInfo(mainDataPath);
             FileInfo[] files = di.GetFiles();
             foreach (FileInfo file in files)
@@ -851,7 +858,7 @@ namespace Ouroboros_API
                 file.Delete();
                 GetContents(url, false, -1);
             }
-            if (debugLevel >= DebugLevel.Basic) Println("Finished renewing all data");
+            DebugPrint(DebugLevel.Basic, "Finished renewing all data");
         }
 
         /// <summary>
@@ -872,7 +879,7 @@ namespace Ouroboros_API
 
                 file.Delete();
             }
-            if (debugLevel >= DebugLevel.Full) Println("Folder contents deleted successfully");
+            DebugPrint(DebugLevel.Full, "Folder contents deleted successfully");
         }
 
         public static void ClearData(DataType t = DataType.AllSaveData)
@@ -880,27 +887,27 @@ namespace Ouroboros_API
             switch (t)
             {
                 case DataType.AllSaveData:
-                    if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros API SaveData");
+                    DebugPrint(DebugLevel.Basic, "Deleting Ouroboros API SaveData");
                     DeleteFolderContents(mainDataPath, 't', ".");
                     break;
                 case DataType.Leaderboards:
-                    if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros API Leaderboards SaveData");
+                    DebugPrint(DebugLevel.Basic, "Deleting Ouroboros API Leaderboards SaveData");
                     DeleteFolderContents(mainDataPath, 'R', "bGVhZGVyYm9hcm");
                     break;
                 case DataType.LeaderboardScores:
-                    if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros API Leaderboard Score SaveData");
+                    DebugPrint(DebugLevel.Basic, "Deleting Ouroboros API Leaderboard Score SaveData");
                     DeleteFolderContents(mainDataPath, 'Q', "bGVhZGVyYm9hcm");
                     break;
                 case DataType.PlayerScores:
-                    if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros API Player Score SaveData");
+                    DebugPrint(DebugLevel.Basic, "Deleting Ouroboros API Player Score SaveData");
                     DeleteFolderContents(mainDataPath, 'L', "cGxheWVy");
                     break;
                 case DataType.Configs:
-                    if (debugLevel >= DebugLevel.Basic) Println("Deleting Ouroboros player configs");
+                    DebugPrint(DebugLevel.Basic, "Deleting Ouroboros player configs");
                     DeleteFolderContents(userDataPath, 'j', ".");
                     break;
                 case DataType.Playlists:
-                    if (debugLevel >= DebugLevel.Advanced) Println("Clearing playlist folder");
+                    DebugPrint(DebugLevel.Advanced, "Clearing playlist folder");
                     DeleteFolderContents($@"{ouroborosPath}#\", 'b', ".");
                     DeleteFolderContents($@"{ouroborosPath}Sniping\", 'b', ".");
                     DeleteFolderContents($@"{ouroborosPath}Øuroboros\", 'b', ".");
@@ -943,6 +950,17 @@ namespace Ouroboros_API
 
         #region Print Functions
 
+        public static void DebugPrint(DebugLevel messageDebugLevel, string message, bool invertStatement = false)
+        {
+            bool normalCheck = debugLevel < messageDebugLevel;
+            bool invertedCheck = debugLevel > messageDebugLevel;
+            bool check = invertStatement ? invertedCheck : normalCheck;
+            if (check)
+                return;
+
+            Println(message);
+        }
+
         public static void Print(dynamic contents)
         {
             Console.Write(contents);
@@ -978,6 +996,16 @@ namespace Ouroboros_API
 
         public static void PrintLeaderboardInfos(LeaderboardInfo[] lbis)
         {
+            Print($"{AWSAS("Stars", 7)}\t | ");
+            Print($"{AWSAS("Max Score", 9)}\t | ");
+            Print($"Date\t\t | ");
+            Print($"{AWSAS("Map Id", 7)} | ");
+            Print($"{AWSAE("Difficulty", 10)}\t | ");
+            Print($"{AWSAE("Level Author", 20)}\t | ");
+            Print($"{AWSAE("Song Author", 20)}\t | ");
+            Print("Song Name");
+            Println("\n");
+
             foreach (LeaderboardInfo lbi in lbis)
             {
                 PrintLeaderboardInfo(lbi);
@@ -1077,6 +1105,7 @@ namespace Ouroboros_API
             {
                 result += " ";
             }
+
             return result + s;
         }
 
@@ -1087,6 +1116,7 @@ namespace Ouroboros_API
             {
                 result += " ";
             }
+
             return s + result;
         }
 

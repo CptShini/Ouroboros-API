@@ -1,11 +1,11 @@
 ﻿using Ouroboros_API.ScoreSaberClasses;
-using static Ouroboros_API.DebugManager;
-using static Ouroboros_API.Core;
+using static Ouroboros_API.Legacy.DebugManager;
+using static Ouroboros_API.Legacy.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Ouroboros_API
+namespace Ouroboros_API.Legacy
 {
     /// <summary>
     /// A library containing all types of available queries to the ScoreSaber API.
@@ -69,7 +69,7 @@ namespace Ouroboros_API
             int minStar = (int)MathF.Round(stars.minStars, MidpointRounding.ToNegativeInfinity);
             int maxStar = (int)MathF.Round(stars.maxStars, MidpointRounding.ToPositiveInfinity);
 
-            if (debugLevel >= DebugLevel.Advanced) Println($"Retriving {(sort == 0 ? "decending" : "ascending")} ranked leaderboards between {minStar} and {maxStar} stars");
+            DebugPrint(DebugLevel.Advanced, $"Retriving {(sort == 0 ? "decending" : "ascending")} ranked leaderboards between {minStar} and {maxStar} stars");
 
             LeaderboardInfo[] maps = Array.Empty<LeaderboardInfo>();
             for (int i = minStar; i < maxStar; i++)
@@ -82,7 +82,7 @@ namespace Ouroboros_API
                 maps = (sort == 1) ? AppendArrays(maps, lbic.leaderboards) : AppendArrays(lbic.leaderboards, maps);
             }
 
-            if (debugLevel >= DebugLevel.Full) Println("Finished retriving leaderboards");
+            DebugPrint(DebugLevel.Full, "Finished retriving leaderboards");
 
             maps = maps.Where(m => !glitchedMaps.Any(id => id == m.id)).ToArray();
 
@@ -91,7 +91,7 @@ namespace Ouroboros_API
             for (int i = 0; i < mapList.Count; i++)
             {
                 LeaderboardInfo lb = mapList[i];
-                lb.songNameWDiff = GetSongNameWDiff(lb);
+                lb.beatmapName = GetSongNameWDiff(lb);
 
                 if (incorrectMaxScoreMaps.ContainsKey(lb.id))
                 {
@@ -114,12 +114,12 @@ namespace Ouroboros_API
         /// <returns>A page of leaderboards in the form of a collection.</returns>
         private static LeaderboardInfoCollection GetLeaderboardsPage(int page, int minStar, int maxStar, int sort, bool shouldAttemptLoadData, int assumedTotalCount)
         {
-            if (debugLevel >= DebugLevel.Full) Println($"Getting {(sort == 0 ? "decending" : "ascending")} ranked leaderboards between {minStar} and {maxStar} stars page {page}");
+            DebugPrint(DebugLevel.Full, $"Getting {(sort == 0 ? "decending" : "ascending")} ranked leaderboards between {minStar} and {maxStar} stars page {page}");
 
             string url = $"leaderboards?ranked=true&category=3&page={page}{(minStar >= 0 ? $"&minStar={minStar}" : "")}{(maxStar >= 0 ? $"&maxStar={maxStar}" : "")}{(sort >= 0 ? $"&sort={sort}" : "")}";
             string results = GetContents(url, shouldAttemptLoadData, assumedTotalCount);
 
-            if (debugLevel >= DebugLevel.Dev) Println($"Finished getting leaderboards page {page}");
+            DebugPrint(DebugLevel.Dev, $"Finished getting leaderboards page {page}");
             return DeserializeString<LeaderboardInfoCollection>(results);
         }
 
@@ -130,12 +130,12 @@ namespace Ouroboros_API
         /// <returns>The leaderboard's info.</returns>
         public static LeaderboardInfo GetLeaderboardInfo(long leaderboardID)
         {
-            if (debugLevel >= DebugLevel.Advanced) Println($"Getting leaderboard info for {leaderboardID}");
+            DebugPrint(DebugLevel.Advanced, $"Getting leaderboard info for {leaderboardID}");
 
             string url = $"leaderboard/by-id/{leaderboardID}/info";
             string results = GetContents(url, true, -1);
 
-            if (debugLevel >= DebugLevel.Full) Println($"Finished getting leaderboard info for {leaderboardID}");
+            DebugPrint(DebugLevel.Full, $"Finished getting leaderboard info for {leaderboardID}");
             return DeserializeString<LeaderboardInfo>(results);
         }
 
@@ -149,7 +149,7 @@ namespace Ouroboros_API
         /// <returns>A collection of top scores on a given leaderboard.</returns>
         public static Score[] GetLeaderboardScores(long leaderboardID, int n, string countryCode, string search)
         {
-            if (debugLevel >= DebugLevel.Full) Println($"Retriving {(countryCode.Length > 0 ? $"{countryCode} " : "")}leaderboard scores {(search.Length > 0 ? $" with name {search} " : "")}for {leaderboardID}");
+            DebugPrint(DebugLevel.Full, $"Retriving {(countryCode.Length > 0 ? $"{countryCode} " : "")}leaderboard scores {(search.Length > 0 ? $" with name {search} " : "")}for {leaderboardID}");
 
             ScoreCollection sc = GetLeaderboardScoresPage(1, leaderboardID, countryCode, search, true, -1);
             sc.metadata.total = NumResolve(n, sc.metadata.total);
@@ -157,7 +157,7 @@ namespace Ouroboros_API
             Score[] scores = LoopOverPages(sc.metadata.itemsPerPage, sc.metadata.total, 2, func);
             
 
-            if (debugLevel >= DebugLevel.Dev) Println($"Finished retriving {sc.metadata.total} leaderboard scores for {leaderboardID}");
+            DebugPrint(DebugLevel.Dev, $"Finished retriving {sc.metadata.total} leaderboard scores for {leaderboardID}");
             scores = AppendArrays(sc.scores, scores).Take(sc.metadata.total).ToArray();
 
             return scores;
@@ -175,7 +175,7 @@ namespace Ouroboros_API
         /// <returns>A page of top scores from a given leaderboard in the form of a collection.</returns>
         private static ScoreCollection GetLeaderboardScoresPage(int page, long leaderboardID, string countryCode, string search, bool shouldAttemptLoadData, int assumedTotalCount)
         {
-            if (debugLevel >= DebugLevel.Dev) Println($"Getting {(countryCode.Length > 0 ? $"{countryCode} " : "")}leaderboard scores {(search.Length > 0 ? $" with name {search} " : "")}for {leaderboardID} page {page}");
+            DebugPrint(DebugLevel.Dev, $"Getting {(countryCode.Length > 0 ? $"{countryCode} " : "")}leaderboard scores {(search.Length > 0 ? $" with name {search} " : "")}for {leaderboardID} page {page}");
 
             string url = $"leaderboard/by-id/{leaderboardID}/scores?page={page}{(countryCode.Length > 0 ? $"&countries={countryCode}" : "")}{(search.Length > 0 ? $"&search={search}" : "")}";
             string results = GetContents(url, shouldAttemptLoadData, assumedTotalCount);
@@ -196,40 +196,25 @@ namespace Ouroboros_API
         /// <param name="minAcc">The minimum average ranked accuracy of the player.</param>
         /// <param name="computeAcc">Whether or not to calculate the average ranked accuracy of the players top 50 scores, and use said value instead.</param>
         /// <returns>An array of filtered players fitting the given criteria.</returns>
-        public static Player[] GetFilteredPlayers(string countryCode, int rankFrom, int rankTo, float minAcc, float maxAcc, bool computeAcc)
+        public static Player[] GetFilteredPlayers(string countryCode, int rankFrom, int rankTo, float minAcc, float maxAcc, bool computeAcc, int desiredAmount = -1)
         {
-            if (debugLevel >= DebugLevel.Advanced) Println($"Retriving filtered leaderboards for {(countryCode.Length > 0 ? $"{countryCode} " : "")}ranks {rankFrom} through {rankTo}{(minAcc > 0 ? $" with min. avg. {(computeAcc ? "computed" : "")} acc being {minAcc:00.00}%" : "")}");
+            DebugPrint(DebugLevel.Advanced, $"Retriving filtered leaderboards for {(countryCode.Length > 0 ? $"{countryCode} " : "")}ranks {rankFrom} through {rankTo}{(minAcc > 0 ? $" with min. avg. {(computeAcc ? "computed" : "")} acc being {minAcc:00.00}%" : "")}");
             Player[] players = GetPlayersByRank(countryCode, rankFrom, rankTo);
-            if (computeAcc) players = CalculateAverageAccuracy(players, 50);
             List<Player> filteredPlayers = new();
 
-            if (debugLevel >= DebugLevel.Advanced) Println("Filtering out players that dont fit criteria");
+            DebugPrint(DebugLevel.Advanced, "Filtering out players that dont fit criteria");
             foreach (Player player in players)
             {
-                if (player.scoreStats.averageRankedAccuracy >= minAcc && player.scoreStats.averageRankedAccuracy <= maxAcc) filteredPlayers.Add(player);
+                float acc = computeAcc ? GetAverageAcc(GetPlayerScores(player, 50)) : player.scoreStats.averageRankedAccuracy;
+                if (AccWithinRange(acc)) filteredPlayers.Add(player);
+
+                if (desiredAmount > 0 && filteredPlayers.Count >= desiredAmount) break;
             }
 
-            if (debugLevel >= DebugLevel.Advanced) Println("Finished filtering out players");
+            DebugPrint(DebugLevel.Advanced, "Finished filtering out players");
             return filteredPlayers.ToArray();
-        }
-
-        /// <summary>
-        /// Calculates the average accuracy for an array of players by getting their top n scores.
-        /// </summary>
-        /// <param name="players">The players who's average accuracy amongst their top n scores, you wish to calculate.</param>
-        /// <param name="topN">The number of top scores, from which to compute the average accuracy.</param>
-        /// <returns>The input array, but with an updated player.scoreStats.averageRankedAccuracy value.</returns>
-        public static Player[] CalculateAverageAccuracy(Player[] players, int topN)
-        {
-            if (debugLevel >= DebugLevel.Basic) Println($"Calculating average acc by top {topN} scores; T-{GetTimeEstimate(players.Length, 460)}");
-
-            foreach (Player player in players)
-            {
-                player.scoreStats.averageRankedAccuracy = GetAverageAcc(GetPlayerScores(player, topN));
-            }
-
-            if (debugLevel >= DebugLevel.Basic) Println("Finished calculating average acc");
-            return players;
+            
+            bool AccWithinRange(float acc) => minAcc <= acc && acc <= maxAcc;
         }
 
         /// <summary>
@@ -245,14 +230,14 @@ namespace Ouroboros_API
             PlayerCollection pc = GetPlayersPage(startingPage, countryCode, "", false, -1);
             pc.metadata.total = NumResolve(rankTo, pc.metadata.total);
             
-            if (debugLevel >= DebugLevel.Basic) Println($"Retriving {(countryCode.Length > 0 ? $"{countryCode} " : "")}leaderboards for ranks {rankFrom} through {pc.metadata.total}; T-{GetTimeEstimate((pc.metadata.total - rankFrom) / pc.metadata.itemsPerPage, 3000)}");
+            DebugPrint(DebugLevel.Advanced, $"Retriving {(countryCode.Length > 0 ? $"{countryCode} " : "")}leaderboards for ranks {rankFrom} through {pc.metadata.total}; T-{GetTimeEstimate((pc.metadata.total - rankFrom) / pc.metadata.itemsPerPage, 3000)}");
 
             Player[] func(int page) => GetPlayersPage(page, countryCode, "", true, pc.metadata.total).players;
             Player[] players = LoopOverPages(pc.metadata.itemsPerPage, pc.metadata.total, startingPage + 1, func);
             players = AppendArrays(pc.players, players);
             players = players.Where(p => pc.metadata.total >= (countryCode == "" ? p.rank : p.countryRank) && rankFrom <= (countryCode == "" ? p.rank : p.countryRank)).ToArray();
 
-            if (debugLevel >= DebugLevel.Advanced) Println("Finished retriving leaderboards by rank");
+            DebugPrint(DebugLevel.Full, "Finished retriving leaderboards by rank");
             return players;
         }
 
@@ -265,14 +250,14 @@ namespace Ouroboros_API
         /// <returns>A collection of players fitting given criteria.</returns>
         public static Player[] GetPlayers(int n, string countryCode, string search)
         {
-            if (debugLevel >= DebugLevel.Basic) Println($"Retriving {n} players{(search.Length > 0 ? $" with name {search} " : "")}{(countryCode.Length > 0 ? $" from {countryCode} " : "")}");
+            DebugPrint(DebugLevel.Basic, $"Retriving {n} players{(search.Length > 0 ? $" with name {search} " : "")}{(countryCode.Length > 0 ? $" from {countryCode} " : "")}");
 
             PlayerCollection pc = GetPlayersPage(1, countryCode, search, false, -1);
             pc.metadata.total = NumResolve(n, pc.metadata.total);
             Player[] func(int page) => GetPlayersPage(page, countryCode, search, true, pc.metadata.total).players;
             Player[] players = LoopOverPages(pc.metadata.itemsPerPage, pc.metadata.total, 2, func);
 
-            if (debugLevel >= DebugLevel.Advanced) Println($"Finished retriving {pc.metadata.total} players");
+            DebugPrint(DebugLevel.Advanced, $"Finished retriving {pc.metadata.total} players");
             players = AppendArrays(pc.players, players);
             return players;
         }
@@ -288,12 +273,12 @@ namespace Ouroboros_API
         /// <returns>A page of players fitting the given criteria.</returns>
         private static PlayerCollection GetPlayersPage(int page, string countryCode, string search, bool shouldAttemptLoadData, int assumedTotalCount)
         {
-            if (debugLevel >= DebugLevel.Full) Println($"Getting players {(search.Length > 0 ? $"with name {search} " : "")}{(countryCode.Length > 0 ? $"from {countryCode} " : "")}page {page}");
+            DebugPrint(DebugLevel.Full, $"Getting players {(search.Length > 0 ? $"with name {search} " : "")}{(countryCode.Length > 0 ? $"from {countryCode} " : "")}page {page}");
 
             string url = $"players?page={page}{(countryCode.Length > 0 ? $"&countries={countryCode}" : "")}{(search.Length > 0 ? $"&search={search}" : "")}";
             string results = GetContents(url, shouldAttemptLoadData, assumedTotalCount);
 
-            if (debugLevel >= DebugLevel.Dev) Println($"Finished getting players page {page}");
+            DebugPrint(DebugLevel.Dev, $"Finished getting players page {page}");
             return DeserializeString<PlayerCollection>(results);
         }
 
@@ -305,7 +290,7 @@ namespace Ouroboros_API
         /// <returns>The number of players fitting the given criteria.</returns>
         public static int GetPlayerCount(string countryCode, string search)
         {
-            if (debugLevel >= DebugLevel.Advanced) Println($"Getting number of players {(search.Length > 0 ? $"with name {search} " : "")}{(countryCode.Length > 0 ? $"from {countryCode} " : "")}");
+            DebugPrint(DebugLevel.Advanced, $"Getting number of players {(search.Length > 0 ? $"with name {search} " : "")}{(countryCode.Length > 0 ? $"from {countryCode} " : "")}");
 
             string url = $"players/count?{(countryCode.Length > 0 ? $"&countries={countryCode}" : "")}{(search.Length > 0 ? $"&search={search}" : "")}";
             string results = GetContents(url, true, -1);
@@ -320,7 +305,7 @@ namespace Ouroboros_API
         /// <returns>The information of the given player.</returns>
         public static Player GetPlayerInfoBasic(long playerID)
         {
-            if (debugLevel >= DebugLevel.Full) Println($"Getting basic player info for player {playerID}");
+            DebugPrint(DebugLevel.Full, $"Getting basic player info for player {playerID}");
 
             string url = $"player/{playerID}/basic";
             string results = GetContents(url, false, -1);
@@ -335,7 +320,7 @@ namespace Ouroboros_API
         /// <returns>The information of the given player.</returns>
         public static Player GetPlayerInfoFull(long playerID)
         {
-            if (debugLevel >= DebugLevel.Full) Println($"Getting full player info for player {playerID}");
+            DebugPrint(DebugLevel.Full, $"Getting full player info for player {playerID}");
 
             string url = $"player/{playerID}/full";
             string results = GetContents(url, false, -1);
@@ -355,13 +340,13 @@ namespace Ouroboros_API
             if (player.scoreStats.rankedPlayCount <= 0) return Array.Empty<PlayerScore>();
 
             int totalCount = NumResolve(n, player.scoreStats.rankedPlayCount);
-            if (debugLevel >= DebugLevel.Full) Println($"Retriving {(totalCount > 0 ? $"{totalCount} " : "")}scores for {player.name}");
+            DebugPrint(DebugLevel.Full, $"Retriving {(totalCount > 0 ? $"{totalCount} " : "")}scores for {player.name}");
 
             PlayerScoreCollection psc = GetPlayerScoresPage(1, player, totalCount, true, LastXNumbers(player.scoreStats.totalRankedScore, 9));
             PlayerScore[] func(int page) => GetPlayerScoresPage(page, player, totalCount, true, LastXNumbers(player.scoreStats.totalRankedScore, 9)).playerScores;
             PlayerScore[] playerScores = LoopOverPages(psc.metadata.itemsPerPage, totalCount, 2, func);
             
-            if (debugLevel >= DebugLevel.Dev) Println($"Finished retriving {totalCount} scores for player {player.name}");
+            DebugPrint(DebugLevel.Dev, $"Finished retriving {totalCount} scores for player {player.name}");
             playerScores = AppendArrays(psc.playerScores, playerScores);
             
             for (int i = 0; i < playerScores.Length; i++)
@@ -392,12 +377,11 @@ namespace Ouroboros_API
         private static PlayerScoreCollection GetPlayerScoresPage(int page, Player player, int limit, bool shouldAttemptLoadData, int assumedTotalCount)
         {
             limit = (int)MathF.Min(limit, 100);
-            if (debugLevel >= DebugLevel.Full) Println($"Getting {(limit > 0 ? $"{limit} " : "")}scores for player {player.name} page {page}");
+            DebugPrint(DebugLevel.Dev, $"Getting {(limit > 0 ? $"{limit} " : "")}scores for player {player.name} page {page}");
 
             string url = $"player/{player.id}/scores?page={page}{(limit > 0 ? $"&limit={limit}" : "")}&sort=top";
             string results = GetContents(url, shouldAttemptLoadData, assumedTotalCount);
             
-            if (debugLevel >= DebugLevel.Dev) Println($"Finished getting scores for player {player.name} page {page}");
             PlayerScoreCollection psc = DeserializeString<PlayerScoreCollection>(results);
             
             psc.player = player;

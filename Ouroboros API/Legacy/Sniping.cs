@@ -1,12 +1,10 @@
 ﻿using Ouroboros_API.ScoreSaberClasses;
-using static Ouroboros_API.DebugManager;
-using static Ouroboros_API.Core;
-using static Ouroboros_API.Queries;
-using System;
+using static Ouroboros_API.Legacy.Core;
+using static Ouroboros_API.Legacy.Queries;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Ouroboros_API
+namespace Ouroboros_API.Legacy
 {
     /// <summary>
     /// A library containing all the neccessary functions to manage sniping.
@@ -25,7 +23,7 @@ namespace Ouroboros_API
         /// <returns>Any maps in the sniped players top 50, that wasn't sniped by the sniper.</returns>
         public static PlayerScore[] GetSnipedPlays(Player snipedPlayer, Player sniperPlayer, PlayerScore[] _sniperScores, bool weightByPP, int topN, bool playedByBoth)
         {
-            if (debugLevel >= DebugLevel.Full) Println($"Retriving maps that {sniperPlayer.name} sniped {snipedPlayer.name} on");
+            DebugPrint(DebugLevel.Full, $"Retriving maps that {sniperPlayer.name} sniped {snipedPlayer.name} on");
 
             PlayerScore[] snipedScores = GetPlayerScores(snipedPlayer, topN)/*.Where(ps => ps.score.rank > (int)(snipedPlayer.rank / 100f)).ToArray()*/;
             PlayerScore[] sniperScores = _sniperScores ?? GetPlayerScores(sniperPlayer, -1);
@@ -33,7 +31,7 @@ namespace Ouroboros_API
 
             if (playedByBoth) snipedPlays = snipedPlays.Where(ps => sniperScores.Any(s => s.leaderboard.id == ps.leaderboard.id)).ToArray();
 
-            if (debugLevel >= DebugLevel.Dev) Println("Finished retriving sniped maps");
+            DebugPrint(DebugLevel.Dev, "Finished retriving sniped maps");
             return snipedPlays;
         }
 
@@ -48,14 +46,14 @@ namespace Ouroboros_API
             List<PlayerScore> snipedPlays = new();
             Dictionary<long, PlayerScore> sniperScoresDic = ConvertToIdPlayerScoreDictionary(sniperScores);
 
-            if (debugLevel >= DebugLevel.Full) Println("Filtering out sniped scores");
+            DebugPrint(DebugLevel.Full, "Filtering out sniped scores");
             foreach (PlayerScore play in snipedScores)
             {
                 if (weightByPP && play.score.pp < sniperScores[31].score.pp) break;
                 if (!WasSnipe(play, sniperScoresDic)) snipedPlays.Add(play);
             }
 
-            if (debugLevel >= DebugLevel.Dev) Println("Finished filtering out sniped scores");
+            DebugPrint(DebugLevel.Dev, "Finished filtering out sniped scores");
 
             return snipedPlays.ToArray();
         }
@@ -68,7 +66,15 @@ namespace Ouroboros_API
         /// <returns>True, if sniper has played map AND sniped player. False, if sniper didn't snipe player, or hasn't played map.</returns>
         private static bool WasSnipe(PlayerScore snipedPlay, Dictionary<long, PlayerScore> sniperScores)
         {
-            return sniperScores.TryGetValue(snipedPlay.leaderboard.id, out PlayerScore sniperPlay) && sniperPlay.score.baseScore > snipedPlay.score.baseScore;
+            bool bothPlayed = sniperScores.TryGetValue(snipedPlay.leaderboard.id, out PlayerScore sniperPlay);
+
+            if (!bothPlayed) return false;
+
+            bool sniperPlayBetter = sniperPlay.score.baseScore > snipedPlay.score.baseScore || sniperPlay.score.baseScore == sniperPlay.leaderboard.maxScore;
+
+            if (!sniperPlayBetter) return false;
+
+            return true;
         }
 
         #endregion

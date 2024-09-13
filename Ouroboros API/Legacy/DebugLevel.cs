@@ -1,4 +1,4 @@
-﻿namespace Ouroboros_API
+﻿namespace Ouroboros_API.Legacy
 {
     /// <summary>
     /// A class containing the shared debug level.
