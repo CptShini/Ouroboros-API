@@ -9,12 +9,12 @@ namespace Ouroboros_API.Legacy
         public string PlayerName;
         public long PlayerId;
         public bool GenerateReqPlaylists = true;
-        public bool FcReq = true;
-        public bool PlayedReq = false;
+        public bool FcReq = false;
+        public bool PlayedReq = true;
         public bool ReqPlaylistsSortByAge = true;
         public bool SplitByElderTech = true;
         public bool ReqPlaylistsOnlyFCs = false;
-        public bool SongSuggest = false;
+        public bool SongSuggest = true;
         public bool SsRemoveAlreadyBeat = true;
         public bool SnipeTime = false;
         public int SnipeNum = 10;

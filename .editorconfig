@@ -2,3 +2,9 @@
 
 # IDE0090: Use 'new(...)'
 dotnet_diagnostic.IDE0090.severity = none
+
+# CA1416: Validate platform compatibility
+dotnet_diagnostic.CA1416.severity = silent
+
+# IDE0011: Add braces
+csharp_prefer_braces = when_multiline

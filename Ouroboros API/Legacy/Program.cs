@@ -42,8 +42,8 @@ namespace Ouroboros_API.Legacy
                 return;
             }
             
-            Console.WriteLine("--- Default settings ---\nPlease enter the full path to your install of Beat Saber (should end with: \\Beat Saber\\):");
-            string beatSaberPath = Console.ReadLine();
+            Console.WriteLine("--- Default settings ---\nPlease enter the full path to your install of Beat Saber (should end with: \\Beat Saber):");
+            string beatSaberPath = Console.ReadLine() + '\\';
                 
             Console.WriteLine("\nPlease enter the ID of the player to load by default. (Best to put your own ID)");
             long playerId = Convert.ToInt64(Console.ReadLine());
@@ -59,7 +59,7 @@ namespace Ouroboros_API.Legacy
         {
             while (true)
             {
-                Console.Write("Please enter player ID (-1 for default ID): ");
+                Console.Write("Please enter player ID (-1 for default): ");
                 string input = Console.ReadLine();
                 bool wasNumber = long.TryParse(input, out long id);
                 if (!wasNumber)
@@ -84,7 +84,6 @@ namespace Ouroboros_API.Legacy
                 if (!playerExists)
                 {
                     Console.WriteLine($"Player with id {id}, did not exist. Please try again!");
-                    _programSettings.DefaultPlayerId = -1;
                     
                     Console.ReadLine();
                     Console.Clear();
@@ -204,15 +203,17 @@ namespace Ouroboros_API.Legacy
             Thread.Sleep(3000);
             
             Environment.Exit(0);
-        }
+            
+            return;
 
-        private static void PrintThinkingDots(int n, int delay)
-        {
-            Console.Write('.');
-            for (int i = 1; i < n; i++)
+            static void PrintThinkingDots(int n, int delay)
             {
-                Thread.Sleep(delay);
                 Console.Write('.');
+                for (int i = 1; i < n; i++)
+                {
+                    Thread.Sleep(delay);
+                    Console.Write('.');
+                }
             }
         }
         

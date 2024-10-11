@@ -230,35 +230,37 @@ namespace Ouroboros_API.Legacy
                 PlayerScore[] starScores = scores.Where(ps => maps.Any(m => m.id == ps.leaderboard.id)).ToArray();
 
                 if (starScores.Length == 0) continue;
-
-                if (Core.Config.FcReq)
-                {
-                    if (!GenerateNonFCPlaylist(starScores, stars))
-                    {
-                        n++;
-                        GenerateEmptyPlaylists(n, $"{stars.name}", @"Øuroboros\");
-                        continue;
-                    }
-                }
-                else if (!GenerateNonFCPlaylist(starScores, stars)) n++;
-
-                if (Core.Config.PlayedReq)
-                {
-                    if (!GenerateNotPlayedPlaylist(starScores, stars))
-                    {
-                        n++;
-                        GenerateEmptyPlaylists(n, $"{stars.name}", @"Øuroboros\");
-                        continue;
-                    }
-                }
-                else if (!GenerateNotPlayedPlaylist(starScores, stars)) n++;
-
+                
                 DebugPrint(DebugLevel.None, $"Generating Ouroboros Req {stars.name} playlist", true);
+                if (GenerateHighestPPPlaylist(starScores, stars)) n++;
+
+                if (!GenerateNonFCPlaylist(starScores, stars))
+                {
+                    n++;
+
+                    if (Core.Config.FcReq)
+                    {
+                        GenerateEmptyPlaylists(n, $"{stars.name}", @"Øuroboros\");
+                        continue;
+                    }
+                }
+
+                int notPlayed = GenerateNotPlayedPlaylist(starScores, stars);
+                if (notPlayed > 0) n++;
+                
+                if (notPlayed > 20)
+                {
+                    if (Core.Config.PlayedReq)
+                    {
+                        GenerateEmptyPlaylists(n, $"{stars.name}", @"Øuroboros\");
+                        continue;
+                    }
+                }
+                
 
                 PlayerScore[] FCScores = starScores.Where(ps => ps.score.fullCombo).ToArray();
-                if (!(Core.Config.ReqPlaylistsOnlyFCs && FCScores.Length <= 0))
+                if (!Core.Config.ReqPlaylistsOnlyFCs || FCScores.Length > 0)
                 {
-                    if (GenerateHighestPPPlaylist(starScores, stars)) n++;
                     if (Core.Config.ReqPlaylistsOnlyFCs) starScores = FCScores;
 
                     if (GenerateAbsoluteRankReqPlaylist(starScores, stars)) n++;
@@ -266,7 +268,6 @@ namespace Ouroboros_API.Legacy
                     if (GenerateRelativeRankReqPlaylist(starScores, stars)) n++;
                     if (GenerateRelativeAccReqPlaylist(starScores, stars)) n++;
                 }
-                
 
                 GenerateEmptyPlaylists(n, $"{stars.name}", @"Øuroboros\");
                 DebugPrint(DebugLevel.Advanced, $"Finished generating Ouroboros Req {stars.name} playlist");
@@ -317,11 +318,11 @@ namespace Ouroboros_API.Legacy
         /// <param name="playerScores">All the scores of the player.</param>
         /// <param name="stars">The star range to check within.</param>
         /// <returns>True, if the number of maps not played are less then or equal to 20. Otherwise, returns false.</returns>
-        public static bool GenerateNotPlayedPlaylist(PlayerScore[] playerScores, StarRange stars)
+        public static int GenerateNotPlayedPlaylist(PlayerScore[] playerScores, StarRange stars)
         {
             LeaderboardInfo[] maps = GetLeaderboards(stars, 0);
 
-            maps = maps.Where(m => !playerScores.Any(ps => ps.leaderboard.id == m.id)).Reverse().ToArray();
+            maps = maps.Where(m => playerScores.All(ps => ps.leaderboard.id != m.id)).Reverse().ToArray();
 
             if (Core.Config.SplitByElderTech) maps = SplitByEldertech(maps);
 
@@ -330,7 +331,7 @@ namespace Ouroboros_API.Legacy
             {
                 DebugPrint(DebugLevel.Basic, $"Generating Ouroboros Req playlist {title} of length {maps.Length}");
             }
-            return maps.Length == 0;
+            return maps.Length;
         }
 
         /// <summary>

@@ -27,9 +27,9 @@ namespace Ouroboros_API.Legacy
             players.ToList().ForEach(p => playerScores.Add(GetPlayerScores(p, 50)));
 
             List<ScoredMap> mapList = GetScoredMaps(playerScores, targetAccuracy);
-            LeaderboardInfo[] maps = mapList.Select(map => map._map).ToArray();
+            LeaderboardInfo[] maps = mapList.Select(map => map.Map).ToArray();
 
-            if (Core.Config.SsRemoveAlreadyBeat) maps = maps.Where(lb => !userScores.Where(ps => ps.accuracy > targetAccuracy - 0.25f || ps.score.fullCombo && ps.accuracy > targetAccuracy).Any(ps => ps.leaderboard.id == lb.id)).ToArray();
+            if (Core.Config.SsRemoveAlreadyBeat) maps = maps.Where(lb => userScores.Where(ps => ps.accuracy > targetAccuracy - 0.25f || ps.score.fullCombo && ps.accuracy > targetAccuracy).All(ps => ps.leaderboard.id != lb.id)).ToArray();
 
             GenerateBPList($"Ø Top 100 maps for {player.name} @ {targetAccuracy:00.00}%", @"Sniping\", maps.Take(100).ToArray());
             DebugPrint(DebugLevel.Basic, "Finished generating song suggestion playlist\n");
@@ -39,7 +39,7 @@ namespace Ouroboros_API.Legacy
         {
             List<ScoredMap> mapList = PopulateScoredMapList(scoreList, targetAccuracy);
 
-            mapList = EvaluteScoredMapList(mapList);
+            mapList = EvaluateScoredMapList(mapList);
 
             return mapList;
         }
@@ -54,7 +54,7 @@ namespace Ouroboros_API.Legacy
                 for (int i = 0; i < scores.Length; i++)
                 {
                     float deltaAcc = MathF.Abs(scores[i].accuracy - targetAccuracy);
-                    if (deltaAcc > ScoredMap._accCutoff) continue;
+                    if (deltaAcc > ScoredMap.AccCutoff) continue;
 
                     //result += $"{scores[i].leaderboard.songNameWDiff} ({scores[i].leaderboard.id})={i}={scores[i].accuracy}\n";
 
@@ -67,7 +67,7 @@ namespace Ouroboros_API.Legacy
                     }
                     else
                     {
-                        ScoredMap scoredMap = new ScoredMap(map);
+                        ScoredMap scoredMap = new(map);
                         scoredMap.AddScore(deltaAcc, i);
                         mapDic.Add(map, scoredMap);
                     }
@@ -78,7 +78,7 @@ namespace Ouroboros_API.Legacy
             return mapDic.Values.ToList();
         }
 
-        private static List<ScoredMap> EvaluteScoredMapList(List<ScoredMap> mapList) => mapList.OrderByDescending(m => m.GetMapScore()).ToList();
+        private static List<ScoredMap> EvaluateScoredMapList(List<ScoredMap> mapList) => mapList.OrderByDescending(m => m.GetMapScore()).ToList();
 
         private static float Percentile(float[] sequence, float excelPercentile)
         {
@@ -99,21 +99,19 @@ namespace Ouroboros_API.Legacy
 
     internal class ScoredMap
     {
-        internal readonly static float _positionVal = 1.045f;
-        internal readonly static float _accVal = 0.5f;
-        internal readonly static float _accCutoff = 1.3f;
-        internal readonly static float _amountVal = 0.96f;
+        private const float PositionVal = 1.045f;
+        private const float AccVal = 0.5f;
+        public const float AccCutoff = 1.3f;
+        private const float AmountVal = 0.96f;
 
-        internal LeaderboardInfo _map;
+        internal readonly LeaderboardInfo Map;
 
-        internal List<float> _scores;
-
-        internal int Count => _scores.Count;
+        private readonly List<float> _scores;
 
         internal ScoredMap(LeaderboardInfo map)
         {
-            _map = map;
-            _scores = new List<float>();
+            Map = map;
+            _scores = new();
         }
 
         internal void AddScore(float deltaAcc, int position) => _scores.Add(ScoreMap(deltaAcc, position));
@@ -130,8 +128,8 @@ namespace Ouroboros_API.Legacy
         }
 
         private static float ScoreMap(float deltaAccuracy, int position) => ScorePosition(position) * ScoreAccuracy(deltaAccuracy);
-        private static float ScorePosition(int position) => MathF.Pow(_positionVal, -position) * 50;
-        private static float ScoreAccuracy(float deltaAccuracy) => 1 - MathF.Pow(deltaAccuracy, _accVal) / MathF.Pow(_accCutoff, _accVal);
-        private static float ScoreIndex(int i) => MathF.Pow(_amountVal, i);
+        private static float ScorePosition(int position) => MathF.Pow(PositionVal, -position) * 50;
+        private static float ScoreAccuracy(float deltaAccuracy) => 1 - MathF.Pow(deltaAccuracy / AccCutoff, AccVal);
+        private static float ScoreIndex(int i) => MathF.Pow(AmountVal, i);
     }
 }
